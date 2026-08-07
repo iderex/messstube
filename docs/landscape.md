@@ -30,7 +30,7 @@ software.
 | --- | --- | --- |
 | Oscilloscope raw formats | RigolWFM, a maintained library reading seven vendors' formats behind one call | Neither, for the vendors it covers. This is the family where the README's framing overstates the remainder. |
 | Profilometers and surface metrology | Gwyddion, a long-established analysis program with import modules for the common optical and stylus formats | Wrong shape. The readers are inside a graphical application and under GPL-2.0. |
-| Hall measurement rigs | No open file-format reader found by the searches below | Absence, as far as those searches reach. |
+| Hall measurement rigs | No open file-format reader found by the searches below. Surveyed on 2026-08-07 under #53. | Absence, as far as those searches reach. The family also places three requirements on the measurement type that it does not yet hold. |
 | Vacuum and sputter process controllers | Open code exists for talking to the instruments, not for reading what they store | Absence, as far as those searches reach. |
 
 ## Oscilloscope raw formats
@@ -120,9 +120,107 @@ for width; the command prints one name per line.
 Both run on 2026-08-07.
 
 This is a negative result from a bounded search and it is not a proof that no
-such reader exists. It is stated that way deliberately. The Hall survey in #53
-is where the lead is chased to a primary source, and where the vendors and the
-stored formats are enumerated rather than guessed at.
+such reader exists. It is stated that way deliberately.
+
+### Survey, 2026-08-07
+
+The five survey questions from #53, per candidate format. Where an answer was not
+found, that is written as not found rather than left as a gap, and the same
+answer is not to be read as no such answer existing.
+
+**Which instruments and software versions are actually in use.** Two vendor
+families were identified from public material and a third was not resolved.
+
+Lake Shore Cryotronics 8400 Series Hall Effect Measurement System, with its own
+system software, at <https://www.lakeshore.com/products/product-detail/8400-series-hms/More>
+and the software page at
+<https://www.lakeshore.com/products/product-detail/model-8425/Software>.
+
+Ecopia HMS-3000 and HMS-5000, sold through Bridge Technology and Four Point
+Probes, at <https://four-point-probes.com/ecopia-hms-3000-hall-measurement-system/>
+and <http://www.bridgetec.com/hms5000.html>.
+
+Which software versions are in the field, and how many file generations each
+family has produced over its service life, was not established. Vendor pages
+describe the current product and not its history, and this is the question that
+has to be answered from rigs rather than from the web.
+
+**What the file looks like.** Not established for either family, and the two
+have different shapes of evidence.
+
+For the Lake Shore system, the vendor material describes SQL reporting with
+export to spreadsheet, PDF and word-processor documents rather than a documented
+measurement file. If that holds, the stored artefact is a database and the file a
+user has is an export of it, which is a different reader problem from a binary
+instrument file and would change what a reader for this family even targets.
+That reading is inferred from the product description and was not confirmed
+against a file.
+
+For the Ecopia systems, the vendor material describes tabular results and plots
+of the derived quantities against temperature. No format specification, column
+list or sample file was found.
+
+**Whether an open reader exists anywhere.** None found. Four repository searches,
+all run on 2026-08-07:
+
+    gh api "search/repositories?q=hall+effect+van+der+pauw+parser" --jq '.total_count'
+    0
+    gh api "search/repositories?q=hall+measurement+file+reader" --jq '.total_count'
+    0
+    gh api "search/repositories?q=ecopia+hall" --jq '.total_count'
+    0
+    gh api "search/repositories?q=lakeshore+hall+data" --jq '.total_count'
+    0
+
+Together with the two pynxtools commands above, that is six searches returning
+nothing. The lead recorded earlier on this page, that a Hall reader sits among
+the pynxtools readers, is not confirmed and is not withdrawn: nothing was found
+where it would be, and a search that does not find a thing is not a search that
+shows it is absent. Sources that these searches cannot reach are the ones most
+likely to hold a reader for this family: an import module inside a graphical
+program, a thesis appendix, and a script that never left a research group.
+
+**Whether real files are obtainable, from whom, and on what terms.** Not
+established, and no public source answers it. This question needs a named
+institution and a written answer rather than a search, and until one exists this
+family has no verification corpus. Nothing here should be read as a list of
+obtainable files, because no file has been identified as obtainable.
+
+**What a measurement from this family is, and what it requires of the
+measurement type.** This is the answer that reaches back into the interface, and
+it is a finding rather than a not-found.
+
+A van der Pauw Hall measurement is not one sweep of samples along an axis. NIST's
+description of the procedure has current forced through one pair of contacts
+while the voltage is read across the other pair, the current reversed, the
+contact pair rotated, and then the whole sequence repeated with the magnetic
+field reversed. Sheet resistance and the Hall coefficient are derived from that
+set of readings taken together, and converting sheet quantities to bulk
+quantities needs the thickness of the conducting layer. Source:
+<https://www.nist.gov/pml/nanoscale-device-characterization-division/popular-links/hall-effect/resistivity-and-hall>,
+read on 2026-08-07.
+
+Three things follow that the measurement type fixed in
+`docs/decisions/0004-what-a-read-produces.md` does not currently hold.
+
+The contact geometry of each reading, meaning which pair carried the current and
+which pair was measured. Without it the readings are unlabelled voltages and the
+derivation cannot be reproduced or checked.
+
+The sign of the magnetic field and the sign of the current for each reading. The
+field reversal is not redundancy to be averaged away by a reader; the separation
+of the symmetric and antisymmetric parts is what distinguishes the longitudinal
+resistance from the Hall resistance.
+
+The sample thickness, which is not a measured channel and not an axis, but is
+required to turn the result into a bulk quantity. It is a property of the sample
+rather than of the measurement, and the type has no place for one.
+
+A reader that returned the voltages as channels on a temperature axis and dropped
+the permutation labels and the field signs would produce something that reads
+like a measurement and is not one, which is exactly the failure #53 names. This
+is recorded here for the interface review in #59 and for the type work in #31,
+where it is cheaper to answer than in the middle of writing the reader.
 
 ## Vacuum and sputter process controllers
 
