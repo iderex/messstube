@@ -1,8 +1,10 @@
 # Landscape: what already covers these formats, and what is left
 
-Checked on 2026-08-07. Every claim below carries the command or the URL behind
-it. Coverage moves, and a page that stops being checked is worse than no page,
-so the check date is part of the content rather than decoration.
+First checked on 2026-08-07. Sections carry their own check date where a survey
+has moved it, and that per-section date is the one to trust. Every claim below
+carries the command or the URL behind it. Coverage moves, and a page that stops
+being checked is worse than no page, so the check date is part of the content
+rather than decoration.
 
 ## Two kinds of gap
 
@@ -31,7 +33,7 @@ software.
 | Oscilloscope raw formats | RigolWFM, a maintained library reading seven vendors' formats behind one call | Neither, for the vendors it covers. This is the family where the README's framing overstates the remainder. |
 | Profilometers and surface metrology | Gwyddion, a long-established analysis program with import modules for the common optical and stylus formats | Wrong shape. The readers are inside a graphical application and under GPL-2.0. |
 | Hall measurement rigs | No open file-format reader found by the searches below. Surveyed on 2026-08-07 under #53. | Absence, as far as those searches reach. The family also places three requirements on the measurement type that it does not yet hold. |
-| Vacuum and sputter process controllers | Open code exists for talking to the instruments, not for reading what they store | Absence, as far as those searches reach. |
+| Vacuum and sputter process controllers | Open code exists for talking to the instruments, not for reading what they store. Surveyed on 2026-08-08 under #55. | Absence, and the thinnest coverage of the four. The measurement type holds this family's signals but not its events. |
 
 ## Oscilloscope raw formats
 
@@ -247,8 +249,116 @@ entries for `specs.py`, `omicron.py`, `avantage.py`, `avantage_xlsx_export.py`,
 `total_chrom.py` and `chemstation.py`. Run on 2026-08-07.
 
 As with Hall, this is a bounded search reporting nothing rather than a
-demonstration that nothing exists. The process controller survey in #55 is where
-that is taken further.
+demonstration that nothing exists.
+
+### Survey, 2026-08-08
+
+The five survey questions from #55, plus the one this family adds. Where an
+answer was not found, that is written as not found.
+
+**Which instruments and software versions are actually in use.** Two layers, and
+they are different problems.
+
+The deposition tool and its control software. Kurt J. Lesker systems run the
+vendor's own control software, whose description states that a system event log
+captures user login and logout events, every recipe executed, and system status
+messages, at
+<https://www.lesker.com/process-equipment-division/thin-film-systems/cms-deposition-platform.cfm>.
+AJA International sputter systems are the other family named repeatedly in
+facility equipment listings, for example at
+<https://www.cnfusers.cornell.edu/Thin%20Film%20Deposition>. Both read on
+2026-08-08.
+
+The gauge and flow controllers underneath, from Pfeiffer, Inficon and MKS, which
+are addressed over a bus and whose readings the tool software records rather than
+storing themselves.
+
+Which software versions are in the field was not established, and for this family
+it matters more than for the others: the tool software is frequently a specific
+build installed once when the system was commissioned.
+
+**What the file looks like.** Not established for any of them. No format
+specification, column list or sample file was found for any tool control
+software. The one thing the vendor material does say is directional and worth
+recording: what is described is an event log, not a measurement file, which is
+consistent with this family storing a sequence of things that happened rather
+than a block of samples.
+
+**Whether an open reader exists anywhere.** None found. Six repository searches,
+run on 2026-08-08:
+
+    gh api "search/repositories?q=sputter+deposition+log+parser" --jq '.total_count'
+    0
+    gh api "search/repositories?q=vacuum+process+controller+log+reader" --jq '.total_count'
+    0
+    gh api "search/repositories?q=pfeiffer+maxigauge+log" --jq '.total_count'
+    1
+    gh api "search/repositories?q=mks+mass+flow+controller+log+parser" --jq '.total_count'
+    0
+    gh api "search/repositories?q=inficon+log+parser" --jq '.total_count'
+    0
+    gh api "search/repositories?q=deposition+run+log+parser" --jq '.total_count'
+    0
+
+The single hit is `pklaus/MaxiGauge`, which writes its own log from a gauge
+controller over a serial link rather than reading a format somebody else wrote.
+It carries no license and was last pushed in 2022. That is a logger, not a
+reader, and counting it as coverage would be the collapse this page exists to
+avoid.
+
+**Whether real files are obtainable, from whom, and on what terms.** Not
+established. As with Hall, no file has been identified as obtainable, and this
+page lists none. For this family the obstacle is likely to be sharper than
+copyright: a process log carries operator names, recipe names and run times,
+which is the kind of content an institution has its own reasons to withhold.
+That is a reason to expect the answer to be difficult and not a claim about what
+any institution would say.
+
+**What a measurement from this family is, and whether the measurement type can
+hold a run log.** Partially, and the missing part is the interesting one.
+
+What fits. Continuous signals sampled over hours, meaning chamber pressure, gas
+flows, source powers and substrate temperature, are named channels on a time
+axis with units, which is what the type in
+`docs/decisions/0004-what-a-read-produces.md` already holds. An irregular sample
+interval is fine, because that decision refuses a model assuming a regular one.
+
+What does not fit, and it is three things.
+
+Discrete states. A valve is open or closed, a shutter in or out, a source on or
+off. That is a categorical value with no unit, and a channel of samples with a
+unit is the wrong shape for it.
+
+Events and transitions. A setpoint change, a recipe step boundary, an operator
+action and an alarm happen at a time rather than over one, and what a reader
+needs to preserve is that a state held from one event until the next. Sampling a
+state onto a time grid to make it look like a channel invents values between the
+events, which is the synthesis `docs/decisions/0006-errors-and-partial-reads.md`
+refuses for recovered data and which is no better here.
+
+The boundary of one measurement. The provenance block assumes an input file and a
+read that produced one measurement. A run log is a continuous record with runs
+inside it, and where one measurement starts and stops is a question the file may
+not answer.
+
+So the honest answer is that the type holds the signals and not the log. Adding
+an event series to the core type, or deciding that this family produces something
+other than a measurement, is an interface question and not a reader question, and
+inventing an answer inside a reader would be the quiet bypass #55 names. Recorded
+for the interface review in #59 and for #31.
+
+**The archival argument, stated in halves.** The verified half: no open reader
+for this family was found by the six searches above plus the earlier check on
+this page, which is nine searches in total returning one logger and no reader.
+Among the four families here, that is the thinnest coverage found.
+
+The unverified half: that a process log is routinely stranded on the tool
+computer, and that it is what tells somebody in ten years why a deposition came
+out the way it did. Both are plausible and neither was measured. They would be
+established by asking facilities what happens to their tool computers and their
+logs, which is fieldwork rather than search. The argument is therefore recorded
+as standing on one leg, and it is not withdrawn: the coverage half is measured
+and is the half that says this family is where the remainder is thickest.
 
 ## What this page is for, and how it stays true
 
