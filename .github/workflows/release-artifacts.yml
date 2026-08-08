@@ -1,0 +1,177 @@
+# The thing an operator installs, built on every pull request rather than on
+# release day.
+#
+# WHY THIS RUNS ON A PULL REQUEST AT ALL. A release pipeline whose first run is
+# the release is a pipeline that fails at the release, and the failure is always
+# something small that a pull request would have caught weeks earlier: a target
+# that does not link, a binary that is not where the packaging step looks, a
+# manifest field a tool needs and nobody set. Building it continuously turns
+# those into ordinary red checks on the change that caused them.
+#
+# TWO THINGS IN ONE CHECK, DELIBERATELY. The reference gate this board measures
+# itself against splits the package build and the bill of materials into two
+# required contexts. Here they are one job, because this project produces one
+# artifact and the split would be ceremony rather than information: there is no
+# state in which one of the two is interesting on its own. #26 is where that is
+# argued and docs/gate-parity.md records the merge.
+#
+# THE JOB NAME IS THE INTERFACE, NOT A LABEL. It is what appears on a pull
+# request and what the required-check set in #30 references. The matrix puts the
+# operating system in the name, so there are three names rather than one, and all
+# three belong in that set. Renaming the job, or changing the matrix, changes
+# which checks stand between a change and the mainline.
+#
+# WHY THESE THREE OPERATING SYSTEMS. No decision record fixes a target platform
+# set yet. This is the set docs/decisions/0002-product-surface.md already counts
+# when it prices a deferred Python binding at "a wheel-building pipeline across
+# three operating systems", so it is derived from a decision that has been taken
+# rather than chosen here. If the release milestone settles a different set, that
+# record is what this matrix follows.
+name: Release artifacts
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ "**" ]
+
+# Deny-all at workflow level. Each job grants only the read it needs.
+permissions: {}
+
+# Cancel a superseded run on the same ref. This publishes nothing outside the
+# run, so a cancelled run costs only artifacts nobody has asked for yet.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Release artifacts and bill of materials (${{ matrix.os }})
+    strategy:
+      # One platform failing must not cancel the other two. The whole reason
+      # this runs on every pull request is to see WHICH platform broke, and a
+      # cancelled sibling reports nothing.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          rustc --version --verbose
+
+      - name: Build the operator artifact in release configuration
+        # `--locked` for the same reason every other resolving command in this
+        # tree carries it: a build that rewrites Cargo.lock on the way past is
+        # a build of a graph the committed tree does not describe.
+        #
+        # Release configuration rather than debug, because that is what an
+        # operator installs, and it is the configuration where the optimiser
+        # gets to disagree with the compiler about what the code means.
+        run: cargo build --locked --release --package messstube-cli
+
+      - name: Collect the artifact under a name that says what it is
+        shell: bash
+        env:
+          OS: ${{ matrix.os }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          # The binary is named by the [[bin]] target rather than by the crate,
+          # and cargo appends the platform's executable suffix. Copy whichever
+          # of the two exists and refuse if neither does; an upload step that
+          # finds nothing is the ordinary way one of these pipelines rots into
+          # a green check over an empty directory.
+          found=0
+          for candidate in target/release/messstube target/release/messstube.exe; do
+            if [ -f "$candidate" ]; then
+              cp "$candidate" "staging/$(basename "$candidate" | sed "s/^messstube/messstube-${OS}/")"
+              found=1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No binary at target/release/messstube[.exe] after a release build."
+            ls -la target/release || true
+            exit 1
+          fi
+          ls -la staging
+
+      - name: Keep the artifact with the run
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: operator-artifact-${{ matrix.os }}
+          path: staging/
+          # Fail rather than upload nothing. A retention policy that quietly
+          # accepts an empty upload turns this whole job into a check that
+          # passes when the build produced nothing.
+          if-no-files-found: error
+
+      # ---------------------------------------------------------------------
+      # The bill of materials. One platform, and the reason is written down.
+      # ---------------------------------------------------------------------
+      #
+      # The document describes the resolved dependency graph, and that graph
+      # comes from one committed lockfile rather than from the machine the job
+      # runs on. It is generated with `--target all`, so it covers every
+      # platform's dependencies rather than the host's. Running it on all three
+      # would produce three documents that differ only in their timestamp and
+      # their serial number, and would pay the checker's build three times.
+      - name: Install the bill-of-materials generator
+        if: runner.os == 'Linux'
+        # Built from crates.io with the pinned toolchain rather than fetched
+        # through a third-party action, for the same reason the dependency check
+        # is: the gate's own supply chain stays the registry and the toolchain
+        # this tree already resolves against. The version is pinned in
+        # `.github/cargo-cyclonedx-version` so a new release of the generator
+        # cannot change the document without a change here.
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .github/cargo-cyclonedx-version)"
+          cargo install --locked "cargo-cyclonedx@${version}"
+          cargo cyclonedx --version
+
+      - name: Generate the bill of materials from the resolved graph
+        if: runner.os == 'Linux'
+        # CycloneDX JSON, generated from cargo's own resolution rather than from
+        # a list anybody maintains. This is the artefact that answers, months
+        # after a release, whether a published advisory affects a version
+        # somebody has installed. A hand-written list answers that question
+        # wrongly and with confidence.
+        run: |
+          set -euo pipefail
+          cargo cyclonedx \
+            --manifest-path crates/messstube-cli/Cargo.toml \
+            --format json \
+            --spec-version 1.5 \
+            --all \
+            --all-features \
+            --target all \
+            --describe crate
+          mkdir -p sbom
+          # Refuse an empty result rather than uploading one. `find -print -quit`
+          # so a generator that wrote nothing is a failure here and not an empty
+          # artifact somebody downloads in six months.
+          if [ -z "$(find crates/messstube-cli -name '*.cdx.json' -print -quit)" ]; then
+            echo "::error::The generator wrote no CycloneDX document."
+            exit 1
+          fi
+          find crates/messstube-cli -name '*.cdx.json' -exec cp {} sbom/ \;
+          ls -la sbom
+
+      - name: Keep the bill of materials with the run
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bill-of-materials
+          path: sbom/
+          if-no-files-found: error
