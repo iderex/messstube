@@ -9,17 +9,18 @@
 # a second gate, and the two would drift apart without anybody deciding that
 # they should.
 #
-# THE THREE JOB NAMES BELOW ARE THE INTERFACE, NOT LABELS. They are what appears
-# on a pull request, and they are the first entries of the required-check set
-# that #30 applies to the branch ruleset. A ruleset entry matches a check by its
-# name, so renaming a job here is a change to the gate: the entry stops matching
-# and the check silently stops standing between a change and the mainline.
-# Rename one only together with the ruleset.
+# THE JOB NAMES BELOW ARE THE INTERFACE, NOT LABELS. They are what appears on a
+# pull request, and they are the first entries of the required-check set that #30
+# applies to the branch ruleset. A ruleset entry matches a check by its name, so
+# renaming a job here is a change to the gate: the entry stops matching and the
+# check silently stops standing between a change and the mainline. Rename one
+# only together with the ruleset.
 #
-# There are three rather than one because the three failures mean different
-# things. A reviewer should be able to see whether a red run is a formatting
-# difference, a lint, or code that does not build or does not pass its tests,
-# without opening a log.
+# There is more than one job because the failures mean different things. A
+# reviewer should be able to see whether a red run is a formatting difference, a
+# lint, code that does not build or does not pass its tests, or a dependency the
+# policy refuses, without opening a log. How many there are is not written here,
+# because the answer is the list below and a count beside it would drift from it.
 name: Gate
 
 on:
@@ -107,3 +108,48 @@ jobs:
         # stops the run before the test leg reports the same thing a second
         # time in a less readable form.
         run: cargo gate build test
+
+  dependencies:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Dependency policy and advisories
+    runs-on: ubuntu-latest
+    # Longer than the other jobs because the step below builds the checker from
+    # source. What it is waiting on is a compile, not a scan.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Install the dependency checker
+        # Built from crates.io with the pinned toolchain rather than fetched as
+        # a prebuilt binary through a third-party action, so the gate's own
+        # dependency surface stays the registry and the toolchain the tree
+        # already pins. `--locked` builds it from the lockfile its own crate
+        # ships. The cost is that this step compiles for minutes on every run,
+        # which is why the timeout above is what it is.
+        #
+        # The version is pinned, so that a new release of the checker cannot
+        # turn a green mainline red overnight for reasons unrelated to any
+        # change here. It is pinned in ONE file, `.github/cargo-deny-version`,
+        # read by this step and by the scheduled caller in advisories.yml. Two
+        # callers of one leg disagreeing about the version of the tool that
+        # decides it would be two gates again, and the disagreement would show
+        # up first on the caller nobody is watching.
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .github/cargo-deny-version)"
+          cargo install --locked "cargo-deny@${version}"
+          cargo deny --version
+      - name: Run the dependency leg of the gate verb
+        # The same leg a contributor runs before pushing. It reads deny.toml,
+        # which is where the policy actually lives; this file chooses when the
+        # leg runs and nothing about what it decides.
+        run: cargo gate deps

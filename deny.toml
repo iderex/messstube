@@ -1,0 +1,132 @@
+# The dependency policy. What a dependency of this repository is allowed to be,
+# stated in one file that a machine reads, rather than in a paragraph somebody
+# is supposed to remember.
+#
+# The gate verb runs this as its `deps` leg, so the policy is enforced by the
+# same command a contributor runs before pushing. It is also run on a weekly
+# schedule, because the interesting advisory is the one published after the code
+# stopped changing, and a check that only runs on a pull request can never see
+# that one.
+#
+# THIS IS NOT THE SAME THING AS THE DEPENDENCY REVIEW WORKFLOW ALREADY IN THE
+# TREE. That one looks at what a pull request adds. This one looks at the whole
+# resolved graph, including everything that was already there and has been sitting
+# unexamined since the day it landed.
+#
+# The graph is small on purpose. A format reader that pulls in a hundred crates
+# has already lost the argument it was making about auditability, and
+# `Cargo.toml` keeps `[workspace.dependencies]` empty for that reason.
+
+[graph]
+# Judge every target and every feature, not the ones that happen to be enabled
+# on the machine the check runs on. An advisory against a crate that is only
+# reachable on Windows is still an advisory against this repository, and a run
+# on a Linux gate that quietly skipped it would report a clean graph it never
+# looked at.
+all-features = true
+
+[output]
+# Print the chain that pulls a flagged crate in. Without it the report names a
+# crate nothing in this tree mentions by name, and the first question a reader
+# asks - who asked for this - takes a separate command to answer.
+feature-depth = 3
+
+# ---------------------------------------------------------------------------
+# Advisories: the whole resolved graph against the RustSec database.
+# ---------------------------------------------------------------------------
+[advisories]
+# Fail on a known vulnerability. This is the default in this version of the
+# tool and it is written out anyway, because it is the sentence the issue that
+# asked for this file is about, and a default is a thing that changes under you.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# A yanked version is a version its author withdrew. Treat it as a refusal
+# rather than a warning: the lockfile is committed here, so a yanked crate stays
+# resolved forever until somebody is made to look at it.
+yanked = "deny"
+# Empty, and it stays empty until an entry can carry the reason it exists and
+# the condition that removes it. An ignore list that accumulates unexplained
+# identifiers is how an advisory scan stops meaning anything.
+ignore = []
+
+# ---------------------------------------------------------------------------
+# Licenses. Which licenses a dependency may carry.
+# ---------------------------------------------------------------------------
+#
+# THIS SECTION DEPENDS ON AN ANSWER THIS BOARD DOES NOT HAVE. Entry 1 of #1 is
+# the maintainer's decision on the license of this repository, and it is open:
+# there is no LICENSE file in the tree, so the default is exclusive copyright.
+#
+# Until that entry is settled this list is the permissive-compatible set, which
+# is the set that stays correct under every option in entry 1 that the plan can
+# be built against. It is deliberately the narrow choice rather than the
+# convenient one: a permissive allow-list is compatible with a copyleft answer
+# to entry 1, while a list widened to admit copyleft dependencies would have to
+# be narrowed again if the answer is permissive, after the dependencies are
+# already in the tree and someone has to remove them.
+#
+# When entry 1 is answered, the answer lands as a decision record under
+# `docs/decisions/` and this list is revisited against it in the same change.
+[licenses]
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unicode-3.0",
+    "Zlib",
+]
+# A crate whose license cannot be determined is refused rather than warned
+# about. That is this version's behaviour with an empty allow-list of its own,
+# and the threshold below is what decides "cannot be determined": a license file
+# that only approximately matches a known text scores below it and is treated as
+# unknown instead of as the license it resembles.
+confidence-threshold = 0.93
+# An entry in the list above that no crate in the graph uses is not reported.
+# `[workspace.dependencies]` is empty today, so every entry is unmatched and the
+# check would print nine warnings about a graph with nothing in it. Nine warnings
+# on every clean run is how a reader learns to skip the output, and then the one
+# warning that matters arrives in the middle of them.
+unused-allowed-license = "allow"
+
+[licenses.private]
+# The crates in this workspace carry no license field and are `publish = false`,
+# which is the state entry 1 of #1 leaves them in. This setting excuses exactly
+# those - members of this workspace - and nothing that is fetched. Without it
+# the check would refuse this repository's own crates for the open decision
+# above, which is a true statement made in the wrong place: the tracker holds
+# that question, and a permanently red gate would not make it get answered any
+# sooner.
+ignore = true
+
+# ---------------------------------------------------------------------------
+# Bans: what the shape of the graph may be.
+# ---------------------------------------------------------------------------
+[bans]
+# Two major versions of one crate in the graph is reported, not refused. It is
+# usually somebody else's transitive choice and not fixable from here, so
+# refusing it would mean either an ignore entry per occurrence or a dependency
+# this project does not take for a reason that is not about this project.
+multiple-versions = "warn"
+# A wildcard version requirement is refused. It resolves to whatever exists on
+# the day of the build, which is the opposite of what the committed lockfile and
+# the locked-mode build legs are for.
+wildcards = "deny"
+allow-wildcard-paths = false
+
+# ---------------------------------------------------------------------------
+# Sources: where a dependency may come from.
+# ---------------------------------------------------------------------------
+[sources]
+# crates.io and nothing else. A git dependency has no published version, no
+# yanking, and nothing that stops the branch it names from being rewritten under
+# the lockfile; a private registry would be a second place a reader has to be
+# able to reach before they can build this. Either may turn out to be the right
+# call for some future dependency, and the way to take it is to change this file
+# in a pull request that argues for it.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
