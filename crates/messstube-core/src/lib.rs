@@ -6,6 +6,11 @@
 //! quantity in. Neither carries reader logic or format knowledge, and neither
 //! reads or writes anything.
 //!
+//! What a read says when it does not produce one of those is [`error`], from
+//! #34: the two failure kinds, the absolute byte offset a damaged file carries,
+//! and the option that turns a refusal into a partial result with its losses
+//! named.
+//!
 //! The reader interface and the compile-time registry are #32, and
 //! identification over a bounded prefix is #33. Their module layout is left to
 //! those issues rather than guessed at here.
@@ -22,6 +27,7 @@
 // by an attribute somebody adds in a hurry.
 #![forbid(unsafe_code)]
 
+pub mod error;
 pub mod measurement;
 pub mod unit;
 
