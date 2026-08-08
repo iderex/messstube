@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/messstube-core", "crates/messstube-cli"]
+members = ["crates/messstube-core", "crates/messstube-cli", "xtask"]
+
+# `xtask` is a workspace member rather than a directory beside it, so that the
+# gate verb is formatted, linted, built and tested by the legs it runs. A gate
+# held to a lower standard than the code it judges is the first place a
+# contributor learns which rules are real.
 
 # Settings every crate in the workspace inherits, so that a new crate cannot
 # quietly differ from the others on the things that are decisions rather than

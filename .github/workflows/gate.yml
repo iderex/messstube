@@ -1,0 +1,109 @@
+# The first check in this tree that reads the code. Everything else here guards
+# the repository; this one compiles it.
+#
+# ONE VERB, TWO CALLERS. Every step that judges anything below runs `cargo gate`,
+# which is the same command a contributor runs before pushing. The verb is in
+# `xtask/src/main.rs` and it owns the list of legs, their order, and the rule
+# that a run stops at the first failure. This file chooses which legs each check
+# covers and nothing else. A step here that ran `cargo clippy` directly would be
+# a second gate, and the two would drift apart without anybody deciding that
+# they should.
+#
+# THE THREE JOB NAMES BELOW ARE THE INTERFACE, NOT LABELS. They are what appears
+# on a pull request, and they are the first entries of the required-check set
+# that #30 applies to the branch ruleset. A ruleset entry matches a check by its
+# name, so renaming a job here is a change to the gate: the entry stops matching
+# and the check silently stops standing between a change and the mainline.
+# Rename one only together with the ruleset.
+#
+# There are three rather than one because the three failures mean different
+# things. A reviewer should be able to see whether a red run is a formatting
+# difference, a lint, or code that does not build or does not pass its tests,
+# without opening a log.
+name: Gate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ "**" ]
+
+# Deny-all at workflow level. Each job grants only the read it needs.
+permissions: {}
+
+# Cancel a superseded run on the same ref. Nothing here publishes anything, so
+# a cancelled run costs only the verdict it was going to give about a commit
+# nobody is looking at any more.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN.
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        # `rust-toolchain.toml` pins the compiler and the components. The rustup
+        # shims install what it names on first use, so this workflow needs no
+        # toolchain action and adds no third-party dependency to the gate.
+        # Printing the versions is what makes a verdict in this log carry the
+        # compiler that produced it.
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Run the formatting leg of the gate verb
+        run: cargo gate format
+
+  lint:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Run the lint leg of the gate verb
+        run: cargo gate lint
+
+  build-and-test:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Run the build and test legs of the gate verb
+        # Both legs in one call, in the verb's own order, so a compile failure
+        # stops the run before the test leg reports the same thing a second
+        # time in a less readable form.
+        run: cargo gate build test
