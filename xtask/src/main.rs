@@ -21,9 +21,10 @@
 //! cargo gate build test
 //! ```
 //!
-//! The verb prints every command it runs and, when it stops early, which legs
-//! it did not reach. A run that covered part of the set must not be readable as
-//! a run that covered all of it and found nothing.
+//! The verb prints every command it runs, and it names every leg it did not
+//! examine together with the reason: the run stopped before it, or nobody asked
+//! for it. A run that covered part of the set must not be readable as a run
+//! that covered all of it and found nothing.
 
 #![forbid(unsafe_code)]
 
@@ -119,6 +120,12 @@ fn select<'a>(requested: &[String], legs: &'a [Leg]) -> Result<Vec<&'a Leg>, Str
 }
 
 /// What a run did, in enough detail to tell a covered set from a partial one.
+///
+/// A leg can be absent from a run for two different reasons, and the two are
+/// kept apart here rather than merged into one list. A leg the run stopped
+/// short of might have refused; a leg nobody asked for was never a question.
+/// Both are things this run did not examine, and neither may be reported as
+/// though the run had covered it.
 #[derive(Debug, PartialEq, Eq)]
 struct Outcome {
     /// Legs that ran and passed, in the order they ran.
@@ -126,18 +133,63 @@ struct Outcome {
     /// The leg that failed, if one did. There is at most one, because the run
     /// stops there.
     failed: Option<&'static str>,
-    /// Legs that were never attempted because the run stopped first.
+    /// Selected legs that were never attempted, because the run stopped first.
     not_reached: Vec<&'static str>,
+    /// Legs of the gate this run was not asked to cover at all.
+    not_selected: Vec<&'static str>,
 }
 
 impl Outcome {
+    /// How many legs the gate has, derived from this outcome rather than from a
+    /// number written down somewhere that can drift from the list.
+    fn total(&self) -> usize {
+        self.passed.len()
+            + usize::from(self.failed.is_some())
+            + self.not_reached.len()
+            + self.not_selected.len()
+    }
+
+    /// The clause naming everything this run did not examine, with the reason
+    /// for each, or an empty string when the run covered the whole gate.
+    ///
+    /// This is one clause rather than two branches on purpose. Every way a leg
+    /// can be missing has to arrive in the same sentence, so that adding a
+    /// third way cannot produce a report that quietly omits it.
+    fn unexamined(&self) -> String {
+        let mut clauses: Vec<String> = Vec::new();
+        if !self.not_reached.is_empty() {
+            clauses.push(format!(
+                "{} (the run stopped before them)",
+                self.not_reached.join(", ")
+            ));
+        }
+        if !self.not_selected.is_empty() {
+            clauses.push(format!(
+                "{} (not asked for on this run)",
+                self.not_selected.join(", ")
+            ));
+        }
+        if clauses.is_empty() {
+            return String::new();
+        }
+        format!(
+            " NOT EXAMINED: {}. This run says nothing about those.",
+            clauses.join("; ")
+        )
+    }
+
     /// The line a reader is entitled to: what ran, what failed, and what was
-    /// therefore not examined at all.
+    /// not examined at all.
     fn report(&self) -> String {
         let mut out = String::new();
         match self.failed {
             None => {
-                let _ = write!(out, "gate: {} leg(s) passed", self.passed.len());
+                let _ = write!(
+                    out,
+                    "gate: {} of {} leg(s) passed",
+                    self.passed.len(),
+                    self.total()
+                );
                 if !self.passed.is_empty() {
                     let _ = write!(out, " ({})", self.passed.join(", "));
                 }
@@ -150,39 +202,41 @@ impl Outcome {
                 } else {
                     let _ = write!(out, " after {}", self.passed.join(", "));
                 }
-                if self.not_reached.is_empty() {
-                    out.push_str(". Every other leg had already run.");
-                } else {
-                    let _ = write!(
-                        out,
-                        ". NOT EXAMINED: {}. A green run of those is not what this run says.",
-                        self.not_reached.join(", ")
-                    );
-                }
+                out.push('.');
             }
         }
+        out.push_str(&self.unexamined());
         out
     }
 }
 
 /// Run the selected legs in order and stop at the first failure.
 ///
+/// `all` is the whole gate, passed alongside the selection so that the outcome
+/// can name the legs nobody asked for. Without it the report could only count
+/// what it ran, and a one-leg run would read like a whole one.
+///
 /// `run` is passed in rather than called directly so that the stopping
 /// behaviour can be tested without a toolchain: the tests below hand it a
 /// closure that fails a chosen leg.
-fn run_legs(legs: &[&Leg], mut run: impl FnMut(&Leg) -> bool) -> Outcome {
+fn run_legs(selected: &[&Leg], all: &[Leg], mut run: impl FnMut(&Leg) -> bool) -> Outcome {
     let mut outcome = Outcome {
         passed: Vec::new(),
         failed: None,
         not_reached: Vec::new(),
+        not_selected: all
+            .iter()
+            .filter(|leg| !selected.iter().any(|chosen| chosen.name == leg.name))
+            .map(|leg| leg.name)
+            .collect(),
     };
 
-    for (index, leg) in legs.iter().enumerate() {
+    for (index, leg) in selected.iter().enumerate() {
         if run(leg) {
             outcome.passed.push(leg.name);
         } else {
             outcome.failed = Some(leg.name);
-            outcome.not_reached = legs[index + 1..].iter().map(|rest| rest.name).collect();
+            outcome.not_reached = selected[index + 1..].iter().map(|rest| rest.name).collect();
             break;
         }
     }
@@ -218,7 +272,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let outcome = run_legs(&selected, |leg| {
+    let outcome = run_legs(&selected, LEGS, |leg| {
         println!("gate: {} leg: {}", leg.name, spell(leg));
         match Command::new(leg.program).args(leg.args).status() {
             Ok(status) => status.success(),
@@ -308,7 +362,7 @@ mod tests {
     #[test]
     fn a_failing_leg_stops_the_run_and_the_rest_are_reported_as_not_reached() {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
-        let outcome = run_legs(&selected, |leg| leg.name != "lint");
+        let outcome = run_legs(&selected, LEGS, |leg| leg.name != "lint");
 
         assert_eq!(
             outcome,
@@ -316,32 +370,91 @@ mod tests {
                 passed: vec!["format"],
                 failed: Some("lint"),
                 not_reached: vec!["build", "test"],
+                not_selected: Vec::new(),
             }
         );
         let report = outcome.report();
-        assert!(report.contains("NOT EXAMINED: build, test"), "{report}");
+        assert!(
+            report.contains("NOT EXAMINED: build, test (the run stopped before them)"),
+            "{report}"
+        );
     }
 
     #[test]
     fn a_clean_run_reports_every_leg_it_examined() {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
-        let outcome = run_legs(&selected, |_| true);
+        let outcome = run_legs(&selected, LEGS, |_| true);
 
         assert_eq!(outcome.failed, None);
         assert_eq!(outcome.passed, ["format", "lint", "build", "test"]);
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
-        assert!(outcome.report().contains("4 leg(s) passed"));
+        assert_eq!(outcome.not_selected, Vec::<&str>::new());
+        let report = outcome.report();
+        assert!(report.contains("4 of 4 leg(s) passed"), "{report}");
+        assert!(!report.contains("NOT EXAMINED"), "{report}");
     }
 
     #[test]
-    fn the_last_leg_failing_reports_nothing_unexamined() {
+    fn the_last_leg_failing_leaves_no_selected_leg_unreached() {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
-        let outcome = run_legs(&selected, |leg| leg.name != "test");
+        let outcome = run_legs(&selected, LEGS, |leg| leg.name != "test");
 
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         let report = outcome.report();
         assert!(!report.contains("NOT EXAMINED"), "{report}");
         assert!(report.contains("stopped at the test leg"), "{report}");
+    }
+
+    #[test]
+    fn a_run_of_one_leg_names_the_legs_it_was_not_asked_for() {
+        // The case this test exists for. An earlier version of the report said
+        // "Every other leg had already run" whenever no SELECTED leg was left,
+        // which on a one-leg run was a positive claim about three legs nothing
+        // had touched. Found by running `cargo gate build` against a
+        // deliberately broken build and reading the last line.
+        let selected = select(&asked(&["build"]), LEGS).expect("build is a leg");
+        let outcome = run_legs(&selected, LEGS, |_| false);
+
+        assert_eq!(outcome.not_selected, ["format", "lint", "test"]);
+        let report = outcome.report();
+        assert!(
+            report.contains("NOT EXAMINED: format, lint, test (not asked for on this run)"),
+            "{report}"
+        );
+        assert!(
+            !report.contains("had already run"),
+            "no phrasing may imply an unselected leg ran: {report}"
+        );
+    }
+
+    #[test]
+    fn a_partial_run_that_stops_early_names_both_kinds_of_absence() {
+        // Two legs asked for, the first refuses. One leg is unreached and two
+        // were never asked for, and the report owes the reader both.
+        let selected = select(&asked(&["lint", "test"]), LEGS).expect("both names are legs");
+        let outcome = run_legs(&selected, LEGS, |leg| leg.name != "lint");
+
+        let report = outcome.report();
+        assert!(
+            report.contains("test (the run stopped before them)"),
+            "{report}"
+        );
+        assert!(
+            report.contains("format, build (not asked for on this run)"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn the_pass_count_is_counted_against_the_whole_gate() {
+        // A one-leg green run must not print a number that reads like the whole
+        // set was clean.
+        let selected = select(&asked(&["format"]), LEGS).expect("format is a leg");
+        let outcome = run_legs(&selected, LEGS, |_| true);
+
+        assert_eq!(outcome.total(), LEGS.len());
+        let report = outcome.report();
+        assert!(report.contains("1 of 4 leg(s) passed"), "{report}");
     }
 
     #[test]
