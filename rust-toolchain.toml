@@ -1,0 +1,8 @@
+# The compiler this repository is built and gated with. A version rather than
+# the word `stable`, so that a checkout selects the same compiler wherever it
+# happens. Raised in #2 and argued in docs/decisions/0001-language-and-toolchain.md.
+# The oldest supported compiler is a separate question, held by #25.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
