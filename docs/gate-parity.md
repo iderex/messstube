@@ -46,7 +46,7 @@ of them is handed arbitrary bytes by strangers as its entire purpose.
 | `build` | Adapted | The reference builds and tests a .NET plugin; here the same intent is one local verb whose build and test leg appears as its own check. | #17 |
 | `ABI floor build` | Adapted | There is no plugin host to floor against, but the same asymmetry exists one level down, so the floor becomes a declared minimum toolchain that the gate compiles against. | #25 |
 | `Package (JPRM) / Build package` | Adapted | The packaging tool is specific to the reference's plugin format; the intent, that a releasable artifact is built on every pull request rather than only at release, transfers. | #26 |
-| `Package (JPRM) / Generate SBOM` | Adapted | Same packaging tool, same reason. A bill of materials is generated from this board's own dependency graph instead. | #26 |
+| `Package (JPRM) / Generate SBOM` | Adapted | Same packaging tool, same reason. A bill of materials is generated from this board's own dependency graph instead. Merged into the row above rather than kept as a second check; the reason is below the table. | #26 |
 | `CodeQL` | Adapted | The static analyser is chosen here by measurement rather than assumed, because analyser coverage for this language is not the same as for the reference's. | #22 |
 | `Analyze (csharp)` | Declined | It is the language-specific check run of the reference's analysis job, and there is no C# in this tree. The static analysis intent is carried by the row above rather than lost. | |
 | `DCO sign-off` | Adopted | | already in the tree; #19 supplied the two files its failure message points at |
@@ -65,6 +65,39 @@ Two of the rows name issues in milestone 2 rather than in this milestone, `build
 and `prettier`, because the local gate verb and the formatting configuration are
 where those two are actually delivered. Recording the real issue is worth more
 than keeping every row inside one milestone.
+
+## Two reference contexts landing as one check
+
+`Package (JPRM) / Build package` and `Package (JPRM) / Generate SBOM` are two
+required contexts on the reference and one job here. The reference splits them
+because it builds several plugin packages and the bill of materials is assembled
+across them; this project produces one operator artifact, so there is no state in
+which one of the two is interesting on its own. A second check name would carry
+no information a reader does not already have from the first, and every name in
+the required set is a thing somebody has to keep matching.
+
+What that job is called is not one name either, and the reason is the opposite
+of a merge. It runs as a matrix over three operating systems, so it produces:
+
+    Release artifacts and bill of materials (ubuntu-latest)
+    Release artifacts and bill of materials (windows-latest)
+    Release artifacts and bill of materials (macos-latest)
+
+All three belong in the required set #30 applies. Merging those would defeat the
+point of building on every pull request, which is to see which platform broke.
+
+The bill of materials is generated on the Linux leg only. It is generated with
+`--target all` from a lockfile committed to this repository, so it describes the
+graph rather than the machine, and the other two legs would produce documents
+differing from it only in a timestamp and a serial number. That is a deviation
+from "both are one check" in the strictest reading and it is recorded here rather
+than left for a reader to discover from the artifact list.
+
+That operating-system set is derived rather than decided: it is the set
+`docs/decisions/0002-product-surface.md` already counts when it prices a deferred
+Python binding at a wheel-building pipeline across three operating systems. No
+decision record fixes a target platform set, and the release milestone is where
+one would be written.
 
 ## What this board adds
 
