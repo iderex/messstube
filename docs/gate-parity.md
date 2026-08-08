@@ -44,7 +44,7 @@ of them is handed arbitrary bytes by strangers as its entire purpose.
 | Reference context | Verdict | Reason, where the verdict is not Adopted | Delivered by |
 | --- | --- | --- | --- |
 | `build` | Adapted | The reference builds and tests a .NET plugin; here the same intent is one local verb whose build and test leg appears as its own check. | #17 |
-| `ABI floor build` | Adapted | There is no plugin host to floor against, but the same asymmetry exists one level down, so the floor becomes a declared minimum toolchain that the gate compiles against. | #25 |
+| `ABI floor build` | Adapted | There is no plugin host to floor against, but the same asymmetry exists one level down, so the floor becomes a declared minimum toolchain that the gate compiles against. It compiles and does not run the suite, because the failure being guarded against is a compile failure on somebody else's machine, and a test failure on the floor toolchain is the one the `build` row's check already reports; running the whole suite a second time buys that difference and nothing else. | #25 |
 | `Package (JPRM) / Build package` | Adapted | The packaging tool is specific to the reference's plugin format; the intent, that a releasable artifact is built on every pull request rather than only at release, transfers. | #26 |
 | `Package (JPRM) / Generate SBOM` | Adapted | Same packaging tool, same reason. A bill of materials is generated from this board's own dependency graph instead. Merged into the row above rather than kept as a second check; the reason is below the table. | #26 |
 | `CodeQL` | Adopted | The measurement that decided this is below the table, under "The analyser was measured before it was chosen". | #22 |
