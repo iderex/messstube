@@ -20,3 +20,59 @@ publish = false
 # needed to compile an empty crate, so this table exists as the single place a
 # later dependency is pinned rather than as a list of what is here.
 [workspace.dependencies]
+
+# The lint set, decided once and here, before there is code to argue about.
+# Every crate takes it by writing `[lints] workspace = true`, so a relaxation is
+# a visible change to this file rather than an attribute somebody adds to their
+# own module.
+#
+# Warnings are errors. The gate verb passes `-D warnings` to the lint leg, which
+# is what turns every `warn` below and every warning the compiler raises on its
+# own into a refusal. A warning that is allowed to accumulate stops being read,
+# and the first important one arrives in a log with four hundred others.
+[workspace.lints.rust]
+# Half of the hostile-input budget in docs/decisions/0007-hostile-input-budget.md,
+# and the half a machine can hold. `forbid` rather than `deny` so that no
+# attribute further down can relax it.
+#
+# Every crate root also carries `#![forbid(unsafe_code)]`, and the duplication is
+# deliberate. The attribute is what 0007 names as the mechanism and it travels
+# with the file; this table is what a crate added to the workspace cannot forget.
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# The pedantic set is on as a whole rather than left off, at a low priority so
+# that the individual entries below can override it. Entries that do not earn
+# their place are turned off one at a time with the reason next to them.
+pedantic = { level = "deny", priority = -1 }
+
+# THE LOSSY-CONVERSION HALF, aimed at reader code. Every one of these formats is
+# a pile of casts between widths, and a truncating cast on a length field is
+# precisely the bug the hostile-input budget exists to prevent. The four are
+# already inside the pedantic set and are named again here so that a later
+# relaxation of that group cannot take them out quietly.
+#
+# They are set for the whole workspace rather than for reader crates alone
+# because there is no reader crate yet, and because a set inherited by every
+# member is one a new reader crate cannot be added without. Nothing outside a
+# reader needs a lossy cast either.
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+cast_precision_loss = "deny"
+
+# THE PANICKING HALF, aimed at library code, so that a malformed file returns an
+# error rather than aborting the process of whoever called the library. A reader
+# is handed bytes by somebody it has never met; a panic on those bytes is a
+# denial of service in the caller's program, not a diagnostic.
+indexing_slicing = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+# A library may not end the process of the program that linked it. The
+# command-line tool reports its status by returning `ExitCode` from `main`, which
+# this does not touch.
+exit = "deny"

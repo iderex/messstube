@@ -12,3 +12,9 @@ name = "messstube"
 path = "src/main.rs"
 
 [dependencies]
+
+# The lint set is the workspace's, in the root Cargo.toml. A crate that wrote
+# its own would be a crate that differs from the others on a decision rather than
+# on a preference.
+[lints]
+workspace = true
