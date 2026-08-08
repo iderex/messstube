@@ -1,0 +1,10 @@
+[package]
+name = "messstube-core"
+version = "0.0.0"
+description = "Measurement types, the reader interface and the identification registry."
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]

@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/messstube-core", "crates/messstube-cli"]
+
+# Settings every crate in the workspace inherits, so that a new crate cannot
+# quietly differ from the others on the things that are decisions rather than
+# preferences.
+[workspace.package]
+edition = "2024"
+rust-version = "1.97.1"
+repository = "https://github.com/iderex/messstube"
+publish = false
+
+# There are no dependencies. #14 requires that no crate carries one that is not
+# needed to compile an empty crate, so this table exists as the single place a
+# later dependency is pinned rather than as a list of what is here.
+[workspace.dependencies]
