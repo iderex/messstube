@@ -1,0 +1,9 @@
+# The gate verb is reached as `cargo gate`. The alias is here rather than in a
+# script so that the same word works on every platform a contributor might be
+# on, without a shell being part of the interface.
+#
+# `--quiet` suppresses cargo's own progress lines for the build of the verb
+# itself, so the first thing printed is the first leg rather than noise about
+# compiling the thing that runs the legs.
+[alias]
+gate = "run --quiet --package xtask --bin xtask --"

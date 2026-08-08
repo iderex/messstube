@@ -11,10 +11,17 @@ failure, and prints what it ran. Run it before you push and read what it says it
 examined, because a run that covered less than the whole set is not a run that
 covered it and found nothing.
 
-That command is not in this tree yet. #17 is the issue that adds it, and this
-section will name it once it is there. Until then nothing here compiles or tests
-anything locally, and the only verdict on a change comes from the checks that run
-on a pull request. Do not read the absence of a local verdict as a passing one.
+That command is:
+
+    cargo gate
+
+It runs the whole set. The checks that run on a pull request call the same
+command over parts of it, so the verdict you get before pushing is the verdict
+the gate gives afterwards, and there is one procedure rather than two.
+
+To run part of the set, pass the name of a check. If you pass a word that is not
+one, the verb refuses it and prints the names it accepts, rather than running
+nothing and reporting a pass.
 
 ## Sign your work
 
