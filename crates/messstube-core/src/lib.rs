@@ -30,6 +30,11 @@ mod tests {
     //! one part of the test conventions that has something to assert before any
     //! reader exists.
 
+    // Turned off for test code only: naming a byte by its offset in a fixture of
+    // known length is the assertion, and rewriting it through a fallible lookup
+    // would hide what the test is checking behind the checking.
+    #![allow(clippy::indexing_slicing)]
+
     /// A truncated header, written the way `docs/testing.md` requires: an
     /// escaped byte-string literal in the source rather than a file in the
     /// tree. The two bytes that matter are at offsets 6 and 7.

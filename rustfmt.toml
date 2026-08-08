@@ -1,0 +1,28 @@
+# Formatting is fixed here rather than being a matter of taste, and it gets its
+# own leg in the gate verb so that a formatting failure and a correctness failure
+# are distinguishable at a glance rather than in a log.
+#
+# The file is short on purpose. Every line in it is a decision somebody could
+# disagree with, and the fewer of those there are, the less of the review budget
+# goes on them.
+
+# Pin the formatting style to a year rather than following the toolchain. Without
+# this, a compiler bump reformats the tree and the diff that comes with it is
+# somebody else's, in every file. The compiler version itself is pinned in
+# rust-toolchain.toml; this is the separate question of which style that compiler
+# applies.
+style_edition = "2024"
+
+# The default, written down so that it is a decision. Long enough for the names
+# this project uses, short enough that two files fit side by side.
+max_width = 100
+
+# Spaces, and how many. Stated because a tab in one file and spaces in the next
+# is exactly the class of difference this file exists to end.
+hard_tabs = false
+tab_spaces = 4
+
+# Line endings are deliberately NOT pinned here, and rustfmt's default of
+# following whatever the file already uses is kept. A fixed value would fight the
+# line-ending translation a checkout applies on Windows, and the format leg would
+# then refuse a file for a reason that has nothing to do with the code in it.

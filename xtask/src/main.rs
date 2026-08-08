@@ -236,7 +236,16 @@ fn run_legs(selected: &[&Leg], all: &[Leg], mut run: impl FnMut(&Leg) -> bool) -
             outcome.passed.push(leg.name);
         } else {
             outcome.failed = Some(leg.name);
-            outcome.not_reached = selected[index + 1..].iter().map(|rest| rest.name).collect();
+            // `skip` rather than a range index. The index cannot be out of
+            // bounds here, but a slice expression is a panicking path and the
+            // lint set denies those in the code this repository ships; a
+            // proof-by-inspection that this one is safe is the argument that
+            // stops holding the first time the loop is rearranged.
+            outcome.not_reached = selected
+                .iter()
+                .skip(index + 1)
+                .map(|rest| rest.name)
+                .collect();
             break;
         }
     }
@@ -309,6 +318,11 @@ mod tests {
     //!
     //! Whether `cargo fmt --check` refuses an unformatted file is the
     //! toolchain's property and is not restated here.
+
+    // Turned off for test code only: a test whose precondition does not hold has
+    // to stop loudly, and `expect` with a sentence in it is the clearest way to
+    // say which precondition that was.
+    #![allow(clippy::expect_used)]
 
     use super::{LEGS, Leg, Outcome, run_legs, select, spell};
 
