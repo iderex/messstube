@@ -40,8 +40,9 @@ fn the_library_is_reachable_from_outside_its_own_crate() {
 /// It also holds two of the three constraints in
 /// `docs/decisions/0002-product-surface.md` where they can actually be seen:
 /// nothing below names a lifetime, and everything it gets back is owned. The
-/// third, that error values are describable without Rust vocabulary, has no
-/// subject yet because the error type is #34.
+/// third, that error values are describable without Rust vocabulary, has a
+/// subject since #34 landed the error type, and it is asserted where that type
+/// is exercised, in `crates/messstube-core/tests/error_model.rs`.
 #[test]
 fn a_caller_can_build_a_measurement_and_read_a_physical_value_from_it() {
     use messstube_core::measurement::{
