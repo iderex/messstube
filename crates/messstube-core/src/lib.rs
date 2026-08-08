@@ -19,3 +19,30 @@
 // review, and `forbid` rather than `deny` so it cannot be relaxed further down
 // by an attribute somebody adds in a hurry.
 #![forbid(unsafe_code)]
+
+#[cfg(test)]
+mod tests {
+    //! The worked example of a unit test, from `docs/testing.md`. A unit test
+    //! lives beside the thing it tests, which is why this block is in the file
+    //! it is about rather than in `tests/`.
+    //!
+    //! What it is about is the fixture rule itself, because that rule is the
+    //! one part of the test conventions that has something to assert before any
+    //! reader exists.
+
+    /// A truncated header, written the way `docs/testing.md` requires: an
+    /// escaped byte-string literal in the source rather than a file in the
+    /// tree. The two bytes that matter are at offsets 6 and 7.
+    const TRUNCATED_HEADER: &[u8] = b"\x4d\x53\x54\x42\x00\x00\x0d\x0a";
+
+    #[test]
+    fn an_escaped_fixture_keeps_the_carriage_return_it_was_written_with() {
+        // The point of the rule. Committed as a raw file, this pair would be
+        // rewritten to a lone 0x0a by the checkout on at least one platform,
+        // and the fixture would go on passing while testing something else.
+        // There is nothing in `\x0d` for a checkout to normalise.
+        assert_eq!(TRUNCATED_HEADER[6], 0x0d);
+        assert_eq!(TRUNCATED_HEADER[7], 0x0a);
+        assert_eq!(TRUNCATED_HEADER.len(), 8);
+    }
+}

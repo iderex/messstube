@@ -7,4 +7,11 @@ rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+# The corpus tests run without the standard test harness, so that a run can
+# report how many cases it could not attempt. The harness can only skip, and a
+# skip disappears into a pass. Argued in docs/testing.md, raised in #16.
+[[test]]
+name = "corpus"
+harness = false
+
 [dependencies]
