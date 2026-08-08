@@ -109,6 +109,53 @@ jobs:
         # time in a less readable form.
         run: cargo gate build test
 
+  minimum-toolchain:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Minimum toolchain build
+    runs-on: ubuntu-latest
+    # Longer than the format and lint jobs because the step below downloads a
+    # second compiler before it can build anything. What it is waiting on is a
+    # toolchain install and a compile.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Install the declared minimum toolchain
+        # The floor leg runs `rustup run <floor> cargo build`, and `rustup run`
+        # refuses a toolchain that is not installed rather than fetching one.
+        # That refusal is deliberate: it keeps the dependency leg the only leg
+        # of the verb that reaches the network, so an offline contributor gets
+        # every verdict the tree alone can give. The consequence is that a
+        # caller supplies the toolchain, and this is where the runner does it.
+        #
+        # The version is not written here. It is read out of the workspace
+        # manifest, which is the one place the floor is declared and the field
+        # cargo itself refuses an older compiler against. A number in this file
+        # would be a third copy, and it would drift from the manifest on the day
+        # the floor is raised.
+        run: |
+          set -euo pipefail
+          floor="$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)"
+          test -n "${floor}"
+          echo "the declared floor is ${floor}"
+          rustup toolchain install --profile minimal "${floor}"
+      - name: Run the floor leg of the gate verb
+        # It compiles and does not run the suite. A test failure on the floor
+        # toolchain is the failure the `Build and test` job above already
+        # reports; what this job is about is whether a compiler that old can
+        # build the workspace at all. Recorded as a deviation from the reference
+        # check in `docs/gate-parity.md`.
+        run: cargo gate floor
+
   dependencies:
     # Referenced by the required-check set in #30 under exactly this name.
     name: Dependency policy and advisories

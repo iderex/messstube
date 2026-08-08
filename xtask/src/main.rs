@@ -19,6 +19,7 @@
 //! cargo gate format
 //! cargo gate lint
 //! cargo gate build test
+//! cargo gate floor
 //! cargo gate deps
 //! ```
 //!
@@ -57,6 +58,26 @@ struct Leg {
     /// most needs it is the one who did not read the document.
     install: Option<&'static str>,
 }
+
+/// The oldest toolchain the workspace must still compile on, spelled once.
+///
+/// It is written here as a macro so that the version appears exactly once in
+/// this file and both the command and the instruction that repairs it are built
+/// from it. Two literals a fortnight apart is how a floor build ends up telling
+/// a contributor to install a toolchain it is not going to use.
+///
+/// The declaration a reader of the tree will find is `rust-version` in the
+/// workspace manifest, which is also the field cargo itself refuses an older
+/// compiler against. This is a copy of it, and
+/// `the_floor_here_is_the_one_the_manifest_declares` below reds the gate when
+/// the two part company.
+macro_rules! floor_version {
+    () => {
+        "1.85.0"
+    };
+}
+
+const FLOOR: &str = floor_version!();
 
 /// The legs, in the order they run. The order is cheapest-and-most-local first:
 /// a formatting difference is decided by reading the file, a lint by reading a
@@ -109,6 +130,61 @@ const LEGS: &[Leg] = &[
         args: &["test", "--locked", "--workspace"],
         means: "a test failed, or a test target could not be built",
         install: None,
+    },
+    Leg {
+        // The floor build, from #25. It compiles the workspace with the oldest
+        // compiler this repository declares it supports, which is
+        // `rust-version` in the workspace manifest and is a different number
+        // from the pin in `rust-toolchain.toml`. Without this leg, raising the
+        // floor is something a change does by accident: a feature stabilised
+        // last month compiles here and fails on the machine of somebody running
+        // an institutional distribution, and it fails at their build rather
+        // than at ours.
+        //
+        // It compiles and does not run the suite. A test failure on the floor
+        // toolchain would be the same failure the `test` leg above already
+        // reports, and what this leg is about is whether the code can be
+        // compiled at all by a compiler that old. The cost of the second half
+        // is a full suite run for a class of failure that is not this one.
+        // Recorded as a deviation in `docs/gate-parity.md` rather than left to
+        // be inferred from this command.
+        //
+        // After `test` rather than beside `build`, because a floor failure is
+        // the narrower statement and is only worth reading once the ordinary
+        // build and the suite are green. Before `deps`, which stays last and
+        // stays the only leg that reaches the network: `rustup run` refuses a
+        // toolchain that is not installed rather than fetching it, and it names
+        // the command that installs it.
+        //
+        //     rustup run 1.83.0 rustc --version
+        //     error: toolchain '1.83.0-x86_64-pc-windows-msvc' is not installed
+        //
+        // Its own build directory, and that is not tidiness. The verb runs as
+        // a program, so `target/debug/xtask` is open while this leg executes,
+        // and a second compiler building the same workspace into the same
+        // directory tries to replace the binary that is running it:
+        //
+        //     cargo gate floor
+        //     error: failed to remove file `target\debug\xtask.exe`
+        //     Caused by: Zugriff verweigert (os error 5)
+        //
+        // Separating the directories also stops the two compilers evicting each
+        // other's artefacts, which would make every ordinary build after a gate
+        // run a full rebuild.
+        name: "floor",
+        program: "rustup",
+        args: &[
+            "run",
+            FLOOR,
+            "cargo",
+            "build",
+            "--locked",
+            "--workspace",
+            "--target-dir",
+            "target/floor",
+        ],
+        means: "the workspace does not compile on the oldest toolchain it declares support for",
+        install: Some(concat!("rustup toolchain install ", floor_version!())),
     },
     Leg {
         // Last, and it is the only leg whose verdict can change while the tree
@@ -376,7 +452,7 @@ mod tests {
     // say which precondition that was.
     #![allow(clippy::expect_used)]
 
-    use super::{LEGS, Leg, Outcome, run_legs, select, spell};
+    use super::{FLOOR, LEGS, Leg, Outcome, run_legs, select, spell};
 
     fn names(legs: &[&Leg]) -> Vec<&'static str> {
         legs.iter().map(|leg| leg.name).collect()
@@ -387,13 +463,13 @@ mod tests {
     }
 
     #[test]
-    fn the_legs_run_format_then_lint_then_build_then_test_then_deps() {
+    fn the_legs_run_format_then_lint_then_build_then_test_then_floor_then_deps() {
         // The order is the interface. A change to it is a change to which
         // failure a contributor is shown first, and it should have to break
         // this line to happen.
         assert_eq!(
             LEGS.iter().map(|leg| leg.name).collect::<Vec<_>>(),
-            ["format", "lint", "build", "test", "deps"]
+            ["format", "lint", "build", "test", "floor", "deps"]
         );
     }
 
@@ -402,7 +478,7 @@ mod tests {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
         assert_eq!(
             names(&selected),
-            ["format", "lint", "build", "test", "deps"]
+            ["format", "lint", "build", "test", "floor", "deps"]
         );
     }
 
@@ -438,13 +514,13 @@ mod tests {
             Outcome {
                 passed: vec!["format"],
                 failed: Some("lint"),
-                not_reached: vec!["build", "test", "deps"],
+                not_reached: vec!["build", "test", "floor", "deps"],
                 not_selected: Vec::new(),
             }
         );
         let report = outcome.report();
         assert!(
-            report.contains("NOT EXAMINED: build, test, deps (the run stopped before them)"),
+            report.contains("NOT EXAMINED: build, test, floor, deps (the run stopped before them)"),
             "{report}"
         );
     }
@@ -455,11 +531,14 @@ mod tests {
         let outcome = run_legs(&selected, LEGS, |_| true);
 
         assert_eq!(outcome.failed, None);
-        assert_eq!(outcome.passed, ["format", "lint", "build", "test", "deps"]);
+        assert_eq!(
+            outcome.passed,
+            ["format", "lint", "build", "test", "floor", "deps"]
+        );
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         assert_eq!(outcome.not_selected, Vec::<&str>::new());
         let report = outcome.report();
-        assert!(report.contains("5 of 5 leg(s) passed"), "{report}");
+        assert!(report.contains("6 of 6 leg(s) passed"), "{report}");
         assert!(!report.contains("NOT EXAMINED"), "{report}");
     }
 
@@ -484,10 +563,15 @@ mod tests {
         let selected = select(&asked(&["build"]), LEGS).expect("build is a leg");
         let outcome = run_legs(&selected, LEGS, |_| false);
 
-        assert_eq!(outcome.not_selected, ["format", "lint", "test", "deps"]);
+        assert_eq!(
+            outcome.not_selected,
+            ["format", "lint", "test", "floor", "deps"]
+        );
         let report = outcome.report();
         assert!(
-            report.contains("NOT EXAMINED: format, lint, test, deps (not asked for on this run)"),
+            report.contains(
+                "NOT EXAMINED: format, lint, test, floor, deps (not asked for on this run)"
+            ),
             "{report}"
         );
         assert!(
@@ -509,7 +593,7 @@ mod tests {
             "{report}"
         );
         assert!(
-            report.contains("format, build, deps (not asked for on this run)"),
+            report.contains("format, build, floor, deps (not asked for on this run)"),
             "{report}"
         );
     }
@@ -523,7 +607,7 @@ mod tests {
 
         assert_eq!(outcome.total(), LEGS.len());
         let report = outcome.report();
-        assert!(report.contains("1 of 5 leg(s) passed"), "{report}");
+        assert!(report.contains("1 of 6 leg(s) passed"), "{report}");
     }
 
     #[test]
@@ -577,8 +661,14 @@ mod tests {
                         "the {} leg's hint is a command that installs something: {install}",
                         leg.name
                     );
+                    // Whatever the hint installs is pinned, so that following
+                    // it cannot leave a contributor running a different tool
+                    // from the one the gate was measured with. Two spellings,
+                    // because the two legs install different kinds of thing: a
+                    // crate built from the lockfile it ships, and one exact
+                    // toolchain version.
                     assert!(
-                        install.contains("--locked"),
+                        install.contains("--locked") || install.contains(FLOOR),
                         "the {} leg's own installation is pinned too: {install}",
                         leg.name
                     );
@@ -591,12 +681,49 @@ mod tests {
     fn every_leg_spells_a_command_a_reader_could_paste() {
         for leg in LEGS {
             let spelled = spell(leg);
-            assert!(spelled.starts_with("cargo "), "{spelled}");
+            // Two programs, and both come from the same rustup installation a
+            // contributor already has: cargo, and rustup itself for the leg
+            // that has to select a toolchain other than the pinned one. A leg
+            // reaching for a third program is a leg whose command a reader
+            // cannot paste without being told where to get it first.
+            assert!(
+                matches!(leg.program, "cargo" | "rustup"),
+                "the {} leg runs {}",
+                leg.name,
+                leg.program
+            );
+            assert!(spelled.starts_with(leg.program), "{spelled}");
             assert!(
                 !leg.means.is_empty(),
                 "the {} leg says what a red run means",
                 leg.name
             );
         }
+    }
+
+    #[test]
+    fn the_floor_here_is_the_one_the_manifest_declares() {
+        // The floor is declared in the workspace manifest, because that is the
+        // field cargo itself refuses an older compiler against, and it is
+        // copied into this file so that the leg's command and its installation
+        // hint can be built from it. A copy is a thing that drifts, and the
+        // drift is silent in the worst direction: the leg goes on compiling
+        // against a version the repository no longer claims to support, and
+        // reports a green floor build for a floor nobody declared.
+        //
+        // Read at compile time from the manifest itself rather than from a
+        // second literal here, so that this test cannot agree with a value it
+        // supplied.
+        let manifest = include_str!("../../Cargo.toml");
+        let declared = manifest
+            .lines()
+            .find_map(|line| line.strip_prefix("rust-version = "))
+            .map(|value| value.trim().trim_matches('"'))
+            .expect("the workspace manifest declares rust-version at column zero");
+
+        assert_eq!(
+            declared, FLOOR,
+            "the floor leg compiles against {FLOOR} and the manifest declares {declared}"
+        );
     }
 }

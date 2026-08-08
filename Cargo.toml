@@ -12,7 +12,37 @@ members = ["crates/messstube-core", "crates/messstube-cli", "xtask"]
 # preferences.
 [workspace.package]
 edition = "2024"
-rust-version = "1.97.1"
+
+# THE FLOOR, AND IT IS NOT THE PIN. `rust-toolchain.toml` names the compiler a
+# checkout and the gate build with, 1.97.1. This names the oldest compiler that
+# must still compile the workspace, and the two are different numbers doing
+# different jobs. Collapsing them is the quiet failure #25 is about: with both
+# set to the pin, the floor build becomes a second copy of the ordinary build,
+# passes forever and guards nothing. That is the state this field was in until
+# this line changed, and cargo said so when the floor build was first attempted:
+#
+#     rustup run 1.85.0 cargo build --locked --workspace
+#     error: rustc 1.85.0 is not supported by the following packages:
+#       messstube-cli@0.0.0 requires rustc 1.97.1
+#
+# 1.85.0 is the first release that accepts `edition = "2024"` above, so it is the
+# lowest this workspace can declare while keeping the edition it has chosen.
+# Measured rather than assumed, on the release below it:
+#
+#     rustup run 1.84.0 cargo build --locked --workspace
+#     error: failed to load manifest for workspace member `crates/messstube-core`
+#     Caused by: feature `edition2024` is required
+#
+# The floor is set as low as the tree can go on purpose. The people this library
+# has to reach run long-lived measurement machines and institutional software
+# distributions, both of which carry older compilers than a developer does, and
+# every release above the floor is an installation that cannot build this at all.
+#
+# Raising it is allowed and is a deliberate act: change this number, say why in
+# the changelog, and bump at least the minor version. What the floor build in the
+# gate refuses is raising it by accident, by using a feature stabilised after it.
+rust-version = "1.85.0"
+
 repository = "https://github.com/iderex/messstube"
 publish = false
 
