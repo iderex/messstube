@@ -192,16 +192,109 @@ why the readers cannot simply be lifted, and it is the concrete case behind entr
 4 of #1, which is the maintainer's decision on whether format knowledge may be
 taken from a copyleft reader at all.
 
-Not settled here. #13 opens with a report that one Bruker format is implemented
-only for one-dimensional files. Neither the module list nor the user guide's
-format table carries that caveat today, and no primary source stating it was
-found on this check. So the claim is neither confirmed nor contradicted here, and
-it is left to the profilometry survey in #54 to settle against the module source
-rather than against a description of it.
+Not settled on that check. #13 opens with a report that one Bruker format is
+implemented only for one-dimensional files, and neither the module list nor the
+user guide's format table carried that caveat. The survey below settles it
+against the module source.
 
 The gap in this family is shape rather than absence. The format knowledge exists,
 is maintained, and is reachable only by launching a graphical program, which is
 what makes these files unreadable in a pipeline.
+
+### Survey, 2026-08-08
+
+The five survey questions from #54. This is the family where #54 expected the
+answer to be uncomfortable, and it is.
+
+**Which instruments and software versions are actually in use.** Taken from the
+importing program's own format table rather than from a market claim, for the
+same reason as the oscilloscope survey: that table is the list a duplicate would
+have to beat. Gwyddion's supported-format table covers the common optical and
+stylus families, and the two Bruker Dektak entries are `dektakvca` version 0.3,
+"Imports Dektak OPDx data files.", and `dektakxml` version 0.2, "Imports Dektak
+XML data files." Sources: <https://gwyddion.net/module-list-nocss.en.php> and
+<https://gwyddion.net/documentation/user-guide-en/file-formats.html>, read on
+2026-08-07 and unchanged on 2026-08-08.
+
+Which firmware generations are in the field was not established, and a repository
+cannot answer it.
+
+**What the file looks like.** For Dektak OPDx it is a tagged item store rather
+than a header and a block: the importer walks a hash of named items such as
+`/1D_Data/Raw/Array`, `/1D_Data/Raw/DataScale` and `/2D_Data/`, each carrying a
+type tag. Read from the module source on 2026-08-08, fetched with:
+
+    curl -sSL "https://sourceforge.net/p/gwyddion/code/HEAD/tree/trunk/gwyddion/modules/file/dektakvca.c?format=raw"
+
+That shape matters to this board beyond this family. A format whose structure is
+a tag store rather than a fixed layout is the case that tests whether a bounded
+cursor and a depth guard are enough, and it is a candidate for the third reader
+in #58 for exactly that reason.
+
+**Whether an open reader exists anywhere.** It does, and its shape is the whole
+problem. Gwyddion is under the GNU General Public License version 2, linked from
+<https://gwyddion.net/>, read on 2026-08-07. That constrains reuse twice over: the
+readers cannot be lifted into a permissively licensed library, and whether their
+format knowledge may even be READ while writing a fresh implementation is entry 4
+of #1 and is the maintainer's to answer. Nothing in this survey assumes either
+answer.
+
+**The one-dimensional claim is contradicted by the module source.** #13 recorded
+a report that the Bruker OPDx import handles one-dimensional data only.
+`dektakvca.c` carries both directions, declared and called:
+
+    static gboolean          find_1d_data    (GHashTable *hash,
+    static gboolean          find_2d_data    (GHashTable *hash,
+
+and the import path calls each in turn, `find_1d_data` building a
+`GwyGraphModel` and `find_2d_data` building a `GwyDataField` from items under
+`/2D_Data/`. The file is Copyright 2017-2018 David Nečas and the module declares
+version 0.3.
+
+So the claim is contradicted rather than unconfirmed, and this page now says so.
+It may well have been true of the version the report was written against; what is
+not true is that it describes the module in the tree today. The claim is
+withdrawn rather than carried forward, because a gap this page keeps advertising
+after it has closed is how a board talks itself into duplicating working
+software.
+
+**Whether real files are obtainable, from whom, and on what terms.** Not
+established. No public collection of Dektak OPDx or optical profilometry files
+was identified on this check, and unlike the oscilloscope family no importing
+project ships instrument-produced samples in its tree. This family therefore has
+no verification corpus and no route to one that does not begin with a named
+institution. Nothing here should be read as a list of obtainable files.
+
+**What a measurement from this family is, and what it requires of the measurement
+type.** Two shapes rather than one, which is the finding. A stylus profile is a
+height against a single lateral position, and an areal map is a height over two
+lateral axes with, in the module above, a mask marking positions where no height
+was recovered. The mask is the part `docs/decisions/0004-what-a-read-produces.md`
+does not hold: a surface map with invalid points is not the same measurement as
+one where those points are zero, and a reader that returned zeros would produce
+something that reads like a measurement and is not one. This is recorded for the
+interface review in #59 and for the type work in #31, in the same place as the
+Hall findings above and for the same reason.
+
+**Recommendation: drop this family.** Not narrow it, drop it, and the reasons are
+cumulative rather than any one being decisive. The coverage exists and is
+maintained. The specific gap this board was carrying, the one-dimensional Bruker
+claim, is contradicted by the source. No real file has been shown to be
+obtainable, so nothing here could be verified to this board's own standard even
+if a reader were written. And the one genuine argument that remains, that the
+coverage is inside a graphical program under a copyleft license and therefore
+unreachable from a pipeline, is an argument about shape that is answered more
+cheaply by asking whether Gwyddion's import modules can be built as a library
+than by writing a fourth implementation of a well-covered format.
+
+That last sentence is the honest form of the outcome #54 anticipated. Writing a
+reader here to keep a promise the README made would cost this board a great deal
+and would give the field nothing it does not have.
+
+Reversing this needs an observation rather than a change of mind: a named
+institution offering real files on stated terms, or a specific format and
+generation shown to be unreadable by the existing coverage. Either one reopens
+this section.
 
 ## Hall measurement rigs
 
