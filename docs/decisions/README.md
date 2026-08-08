@@ -49,11 +49,11 @@ happened.
 What is on `main` today:
 
     $ ls docs/decisions/0*.md | wc -l
-    11
+    12
     $ grep -l -i 'superseded by' docs/decisions/0*.md ; echo "exit=$?"
     exit=1
 
-Eleven records and none of them superseded.
+Twelve records and none of them superseded.
 
 ## What a record is not
 
