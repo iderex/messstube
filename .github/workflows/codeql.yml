@@ -1,0 +1,212 @@
+# Static analysis of the library and the tool, published where a finding can be
+# triaged rather than only where it can be scrolled past.
+#
+# WHY A SECOND ANALYSER AT ALL, WHEN THE LINT LEG ALREADY REFUSES WARNINGS. The
+# lint leg answers "is this code well formed", one function at a time. This
+# answers "can a value a stranger controls reach a place where it does damage",
+# across function and crate boundaries. The two disagree about what they can see,
+# and the second question is the one a project whose whole purpose is to be
+# handed arbitrary bytes has to be able to ask.
+#
+# WHY CODEQL AND NOT THE LINT SET EMITTED AS SARIF. #22 required the choice to be
+# made by measurement rather than by assumption, because the analyser's support
+# for this language is newer than for the language of the reference gate. The
+# measurement, its commands and its numbers are in docs/gate-parity.md under the
+# CodeQL row. In short: the query pack reaches this language, it carries queries
+# about allocation sizes and about untrusted paths, and those are the defect
+# classes this tree exists to survive.
+#
+# WHAT IT FINDS TODAY IS ZERO, AND THAT IS A FACT ABOUT THE TREE. There is no
+# reader and no parsing code yet, so there is nothing here for a security query
+# to reach. That number is not evidence that the analyser works; the rule count
+# in the parity table is what the verdict was taken from. The check is here now
+# so that it is already standing on the day the first reader arrives, rather than
+# being added afterwards against code that has never been looked at.
+#
+# THE JOB NAME IS THE INTERFACE, NOT A LABEL. `CodeQL` is what appears on a pull
+# request and what the required-check set in #30 references. Renaming the job
+# silently detaches it from that set and takes a required check off the gate.
+#
+# THE WORKFLOW FILES THEMSELVES ARE NOT ANALYSED HERE. CodeQL also has an
+# `actions` language, and it is deliberately not in the matrix: zizmor already
+# audits every workflow in this tree at its lowest severity floor and fails on
+# what it finds, so a second analyser over the same subject would add a second
+# required name and no information. That is a deviation from analysing everything
+# the analyser could reach, and it is written here rather than left for a reader
+# to infer from the language list.
+name: CodeQL
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ "**" ]
+
+# Deny-all at workflow level; the job below grants only what it needs.
+permissions: {}
+
+# Cancel a superseded run on the same ref. This is an audit job and publishes
+# nothing outside the run, so a cancelled run costs only an analysis nobody has
+# asked for yet.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write # write the findings into the code-scanning view
+      contents: read # check out the code to analyse
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Initialise the analyser
+        # THE ANALYSER VERSION IS PINNED BY THIS SHA. The action carries the
+        # CodeQL bundle it is built against in `src/defaults.json`, so pinning
+        # the action pins the analyser, the extractor and the query pack
+        # together. `tools: linked` is what says "the bundle this action names"
+        # rather than "whatever is newest today"; without it a new bundle
+        # release turns a green mainline red overnight for reasons unrelated to
+        # any change, which is the failure #22 names.
+        #
+        # Which bundle that is, is printed by the run rather than restated here,
+        # and the reader can also derive it:
+        #
+        #     gh api repos/github/codeql-action/contents/src/defaults.json?ref=<the sha below> --jq .content | base64 -d
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          languages: rust
+          # Rust is one of the languages the extractor can read without a build.
+          # This tree would build in seconds either way; `none` is chosen because
+          # it analyses the source the reader has rather than whatever a build
+          # script generated, which is the version a person reviewing a finding
+          # can actually go and look at.
+          build-mode: none
+          tools: linked
+
+      - name: Analyse the code and publish the findings
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          category: "/language:rust"
+          # Keep the document as well as uploading it, because the refusal step
+          # below reads it. A check that asked the code-scanning API for its own
+          # findings would be a check that depends on the upload having
+          # succeeded, and the upload is the one part of this job that is
+          # allowed to fail.
+          output: sarif
+          # A fork or Dependabot pull request runs with a read-only token and
+          # cannot write a security event. Skip the upload there rather than
+          # failing the job on it. The refusal step below still runs, so the
+          # finding still holds the merge; what is lost is only the triage view.
+          upload: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'always' || 'never' }}
+
+      - name: Prove the refusal refuses, before trusting what it says about the code
+        # THE GUARD IS PROVED ON EVERY RUN RATHER THAN ONCE BY WHOEVER WROTE IT.
+        # The step below is the only thing here that can turn a finding into a
+        # red check, and a guard nobody has watched bite is an intention. So the
+        # same script is first run over crafted documents whose verdict is known,
+        # and this step fails if any of them comes back wrong. Break the script
+        # and this goes red before the real analysis is ever consulted.
+        #
+        # The last two cases are the near-misses worth the effort. A document
+        # with no `results` key at all must pass, because that is a legitimate
+        # shape and a script that refused it would be reverted within a week for
+        # crying wolf. And a document whose SECOND run carries the finding must
+        # fail: reading `.runs[0]` instead of `.runs[]` is the one-character
+        # mistake somebody actually makes, and every other case here passes with
+        # it in place.
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof=$(mktemp -d)
+
+          verdict() {
+            expected="$1"
+            label="$2"
+            directory="$3"
+            set +e
+            .github/scripts/refuse-actionable-findings.sh "${directory}"
+            actual=$?
+            set -e
+            if [ "${actual}" -ne "${expected}" ]; then
+              echo "::error::${label}: the guard exited ${actual}, and the case requires ${expected}."
+              exit 1
+            fi
+            echo "proved: ${label} -> ${actual}"
+          }
+
+          mkdir -p "${proof}/empty-directory"
+          verdict 1 "no document at all" "${proof}/empty-directory"
+
+          mkdir -p "${proof}/unparseable"
+          printf '{ this is not json' > "${proof}/unparseable/rust.sarif"
+          verdict 1 "a document that will not parse" "${proof}/unparseable"
+
+          mkdir -p "${proof}/one-finding"
+          cat > "${proof}/one-finding/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture","rules":[{"id":"fixture/uncontrolled-allocation-size"}]}},"results":[{"ruleId":"fixture/uncontrolled-allocation-size","message":{"text":"a length field taken from the file reaches an allocation"}}]}]}
+          DOCUMENT
+          verdict 1 "a document carrying one finding" "${proof}/one-finding"
+
+          mkdir -p "${proof}/clean"
+          cat > "${proof}/clean/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture","rules":[{"id":"fixture/uncontrolled-allocation-size"}]}},"results":[]}]}
+          DOCUMENT
+          verdict 0 "a document with an empty result set" "${proof}/clean"
+
+          mkdir -p "${proof}/no-results-key"
+          cat > "${proof}/no-results-key/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture"}}}]}
+          DOCUMENT
+          verdict 0 "a document with no results key" "${proof}/no-results-key"
+
+          mkdir -p "${proof}/second-run-carries-it"
+          cat > "${proof}/second-run-carries-it/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture"}},"results":[]},{"tool":{"driver":{"name":"fixture"}},"results":[{"ruleId":"fixture/log-injection","message":{"text":"only the second run carries this"}}]}]}
+          DOCUMENT
+          verdict 1 "a finding in the second run of a document" "${proof}/second-run-carries-it"
+
+          mkdir -p "${proof}/no-runs"
+          cat > "${proof}/no-runs/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0"}
+          DOCUMENT
+          verdict 1 "a document describing no run at all" "${proof}/no-runs"
+
+          # The rule count is the number the CodeQL row in docs/gate-parity.md is
+          # read off, so the line that prints it is asserted rather than trusted.
+          # CodeQL puts the analyser in `tool.driver` and the queries in
+          # `tool.extensions`, and the first version of this script counted only
+          # the first: it printed "0 rule(s) available" over a real analysis
+          # carrying 25 of them. Counting three rules across both places is what
+          # catches that going back.
+          mkdir -p "${proof}/rules-in-extensions"
+          cat > "${proof}/rules-in-extensions/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"CodeQL","rules":[{"id":"fixture/driver-rule"}]},"extensions":[{"name":"codeql/rust-queries","rules":[{"id":"fixture/pack-rule-one"},{"id":"fixture/pack-rule-two"}]}]},"results":[]}]}
+          DOCUMENT
+          verdict 0 "rules declared by a query pack rather than by the driver" "${proof}/rules-in-extensions"
+          counted=$(.github/scripts/refuse-actionable-findings.sh "${proof}/rules-in-extensions")
+          case "${counted}" in
+            *"3 rule(s) available"*) echo "proved: the rule count reaches both places -> ${counted}" ;;
+            *) echo "::error::the rule count missed a place: ${counted}" ; exit 1 ;;
+          esac
+
+          set +e
+          .github/scripts/refuse-actionable-findings.sh
+          called_wrongly=$?
+          set -e
+          if [ "${called_wrongly}" -ne 2 ]; then
+            echo "::error::a call naming no directory: the guard exited ${called_wrongly}, and the case requires 2."
+            exit 1
+          fi
+          echo "proved: a call naming no directory -> ${called_wrongly}"
+
+      - name: Refuse an actionable finding
+        shell: bash
+        run: .github/scripts/refuse-actionable-findings.sh sarif
