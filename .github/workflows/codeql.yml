@@ -173,6 +173,30 @@ jobs:
           DOCUMENT
           verdict 1 "a finding in the second run of a document" "${proof}/second-run-carries-it"
 
+          mkdir -p "${proof}/no-runs"
+          cat > "${proof}/no-runs/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0"}
+          DOCUMENT
+          verdict 1 "a document describing no run at all" "${proof}/no-runs"
+
+          # The rule count is the number the CodeQL row in docs/gate-parity.md is
+          # read off, so the line that prints it is asserted rather than trusted.
+          # CodeQL puts the analyser in `tool.driver` and the queries in
+          # `tool.extensions`, and the first version of this script counted only
+          # the first: it printed "0 rule(s) available" over a real analysis
+          # carrying 25 of them. Counting three rules across both places is what
+          # catches that going back.
+          mkdir -p "${proof}/rules-in-extensions"
+          cat > "${proof}/rules-in-extensions/rust.sarif" <<'DOCUMENT'
+          {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"CodeQL","rules":[{"id":"fixture/driver-rule"}]},"extensions":[{"name":"codeql/rust-queries","rules":[{"id":"fixture/pack-rule-one"},{"id":"fixture/pack-rule-two"}]}]},"results":[]}]}
+          DOCUMENT
+          verdict 0 "rules declared by a query pack rather than by the driver" "${proof}/rules-in-extensions"
+          counted=$(.github/scripts/refuse-actionable-findings.sh "${proof}/rules-in-extensions")
+          case "${counted}" in
+            *"3 rule(s) available"*) echo "proved: the rule count reaches both places -> ${counted}" ;;
+            *) echo "::error::the rule count missed a place: ${counted}" ; exit 1 ;;
+          esac
+
           set +e
           .github/scripts/refuse-actionable-findings.sh
           called_wrongly=$?

@@ -60,8 +60,22 @@ for document in "${documents[@]}"; do
     continue
   fi
 
-  rules=$(jq '[.runs[].tool.driver.rules // [] | length] | add // 0' "${document}")
-  results=$(jq '[.runs[].results // [] | length] | add // 0' "${document}")
+  runs=$(jq '(.runs // []) | length' "${document}")
+  if [ "${runs}" -eq 0 ]; then
+    echo "::error::${document} carries no run. A document describing no analysis is not an analysis that found nothing."
+    status=1
+    continue
+  fi
+
+  # THE RULES ARE IN TWO PLACES AND THE FIRST VERSION OF THIS LINE READ ONLY
+  # ONE. CodeQL names the tool in `tool.driver` and ships the queries as
+  # `tool.extensions`, so counting only `tool.driver.rules` printed "0 rule(s)
+  # available" over a real analysis that had 25 of them. That number is what the
+  # verdict in docs/gate-parity.md was to be read off, and a reporting line that
+  # says zero while the analyser is working is the shape somebody quotes back as
+  # evidence the analyser reaches nothing.
+  rules=$(jq '[(.runs // [])[].tool | (.driver.rules // []), ((.extensions // [])[].rules // [])] | map(length) | add // 0' "${document}")
+  results=$(jq '[(.runs // [])[].results // [] | length] | add // 0' "${document}")
   echo "${document}: ${rules} rule(s) available, ${results} result(s)"
 
   if [ "${results}" -ne 0 ]; then
