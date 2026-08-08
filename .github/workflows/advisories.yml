@@ -1,0 +1,77 @@
+# The dependency leg of the gate, on a timer.
+#
+# WHY A SECOND CALLER FOR A CHECK THAT ALREADY RUNS ON EVERY PULL REQUEST. An
+# advisory is published against code that stopped changing. The interesting case
+# is a crate that was clean the day it landed and has a vulnerability against it
+# six weeks later, and no pull-request-triggered check can ever see that one,
+# because by then there are no pull requests. A gate that only runs when
+# somebody touches the tree reports the state of the tree on the day it was last
+# touched.
+#
+# ONE VERB, MORE THAN ONE CALLER. This runs `cargo gate deps`, the same leg the
+# `Gate` workflow runs and the same one a contributor runs before pushing. The
+# policy is in `deny.toml` and the leg is in `xtask/src/main.rs`. This file
+# decides when, and nothing about what.
+#
+# WHAT A RED RUN HERE DOES, STATED NEGATIVELY. Nothing. It fails, and GitHub
+# notifies whoever watches the repository's actions. It opens no issue, assigns
+# nobody, and does not appear on any pull request, so it cannot hold a merge.
+# The pull-request caller in `Gate` is what stands between a change and the
+# mainline; this one only makes sure somebody is told when the graph goes bad
+# while nothing is happening.
+name: Dependency advisories (scheduled)
+
+on:
+  schedule:
+    # Weekly, Monday morning UTC. The odd minute is so this run does not land in
+    # the same minute as everybody else's cron, where scheduled runs get delayed.
+    - cron: "17 6 * * 1"
+  # So the scan can be run against the current mainline without waiting a week,
+  # which is what somebody does the moment an advisory is in the news.
+  workflow_dispatch:
+
+# Deny-all at workflow level; the job grants only the read it needs.
+permissions: {}
+
+# A scheduled run and a manual one on the same ref are the same question, so a
+# newer one supersedes an in-flight one. Nothing here publishes anything.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisories:
+    # NOT referenced by the required-check set in #30, and it must not be. A
+    # scheduled workflow produces no check run on a pull request, so a ruleset
+    # entry naming this job would match nothing and hold every merge forever.
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    # Longer than a scan needs because the step below builds the checker from
+    # source. What it is waiting on is a compile.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN.
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Install the dependency checker
+        # The same pin the pull-request caller uses, because it is the same
+        # file: `.github/cargo-deny-version`. Two callers of one leg disagreeing
+        # about the version of the tool that decides it would be two gates
+        # again, in the one place the difference is invisible - this is the
+        # caller that runs when nobody is watching.
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .github/cargo-deny-version)"
+          cargo install --locked "cargo-deny@${version}"
+          cargo deny --version
+      - name: Run the dependency leg of the gate verb
+        run: cargo gate deps

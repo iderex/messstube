@@ -1,5 +1,5 @@
-//! The gate verb. One command, four legs, run in a fixed order, stopping at the
-//! first failure.
+//! The gate verb. One command, a fixed list of legs run in order, stopping at
+//! the first failure.
 //!
 //! It exists as a program rather than as steps in a workflow file so that a
 //! contributor gets the same verdict before pushing as the gate gives
@@ -19,7 +19,13 @@
 //! cargo gate format
 //! cargo gate lint
 //! cargo gate build test
+//! cargo gate deps
 //! ```
+//!
+//! Most legs need nothing but the toolchain `rust-toolchain.toml` pins, which
+//! the rustup shims install on first use. A leg that needs something else says
+//! so when it cannot start, and names the command that supplies it, so that the
+//! instruction lives next to the failure instead of in a document.
 //!
 //! The verb prints every command it runs, and it names every leg it did not
 //! examine together with the reason: the run stopped before it, or nobody asked
@@ -42,6 +48,14 @@ struct Leg {
     args: &'static [&'static str],
     /// What a red verdict on this leg tells the reader, in one line.
     means: &'static str,
+    /// The command that supplies this leg's program, for a leg the pinned
+    /// toolchain does not already provide. `None` where the toolchain does.
+    ///
+    /// It is printed only when the program could not be started, which is the
+    /// one moment a contributor needs it. Putting it in a document instead
+    /// would mean the instruction and the leg drift apart, and the reader who
+    /// most needs it is the one who did not read the document.
+    install: Option<&'static str>,
 }
 
 /// The legs, in the order they run. The order is cheapest-and-most-local first:
@@ -53,18 +67,26 @@ struct Leg {
 /// `--all-targets` is on the lint and build legs so that test code, examples
 /// and benches are held to the same standard as the library. A lint that stops
 /// at the library is a lint the test module quietly escapes.
+///
+/// `--locked` is on every leg that resolves a dependency graph. Without it a leg
+/// may rewrite `Cargo.lock` on the way past and then judge a graph that is not
+/// the committed one, so the verdict stops being about the tree the reader has.
+/// The formatting leg reads files and resolves nothing, which is why it is the
+/// one leg without the flag.
 const LEGS: &[Leg] = &[
     Leg {
         name: "format",
         program: "cargo",
         args: &["fmt", "--all", "--check"],
         means: "a file is not formatted the way the configuration in the tree says",
+        install: None,
     },
     Leg {
         name: "lint",
         program: "cargo",
         args: &[
             "clippy",
+            "--locked",
             "--workspace",
             "--all-targets",
             "--",
@@ -72,18 +94,38 @@ const LEGS: &[Leg] = &[
             "warnings",
         ],
         means: "a lint fired, and warnings are errors here",
+        install: None,
     },
     Leg {
         name: "build",
         program: "cargo",
-        args: &["build", "--workspace", "--all-targets"],
+        args: &["build", "--locked", "--workspace", "--all-targets"],
         means: "the workspace does not compile",
+        install: None,
     },
     Leg {
         name: "test",
         program: "cargo",
-        args: &["test", "--workspace"],
+        args: &["test", "--locked", "--workspace"],
         means: "a test failed, or a test target could not be built",
+        install: None,
+    },
+    Leg {
+        // Last, and it is the only leg whose verdict can change while the tree
+        // stands still: an advisory is published against code that stopped
+        // moving months ago. That is also why it is not enough to run this here.
+        // The scheduled caller in `.github/workflows/advisories.yml` runs the
+        // same leg on a timer, because a check that only runs on a pull request
+        // can never see the advisory that arrives after the last one.
+        //
+        // It is also the only leg that reaches the network, which is the second
+        // reason it runs last: an offline machine gets every verdict the tree
+        // alone can give before it is told it cannot have this one.
+        name: "deps",
+        program: "cargo",
+        args: &["deny", "--locked", "check"],
+        means: "the resolved dependency graph breaks the policy in deny.toml, or a crate in it has a published advisory",
+        install: Some("cargo install --locked cargo-deny"),
     },
 ];
 
@@ -296,12 +338,22 @@ fn main() -> ExitCode {
     });
 
     if let Some(failed) = outcome.failed {
-        let means = LEGS
-            .iter()
-            .find(|leg| leg.name == failed)
-            .map_or("see the output above", |leg| leg.means);
+        let leg = LEGS.iter().find(|leg| leg.name == failed);
+        let means = leg.map_or("see the output above", |leg| leg.means);
         eprintln!("{}", outcome.report());
         eprintln!("gate: what that means: {means}.");
+        // Printed on any failure of a leg that needs an outside program, not
+        // only on a missing one. `cargo` is what gets launched for every leg
+        // here, so a missing subcommand is a cargo that started and refused
+        // rather than a program that could not be found, and the branch above
+        // never sees it. Guessing which failure this was from the child's
+        // output would be a guess; saying the condition and letting the reader
+        // check it against the message they just read is not.
+        if let Some(install) = leg.and_then(|leg| leg.install) {
+            eprintln!(
+                "gate: the {failed} leg needs a program the pinned toolchain does not ship. If the output above says the command does not exist, install it with: {install}"
+            );
+        }
         return ExitCode::FAILURE;
     }
 
@@ -335,20 +387,23 @@ mod tests {
     }
 
     #[test]
-    fn the_legs_run_format_then_lint_then_build_then_test() {
+    fn the_legs_run_format_then_lint_then_build_then_test_then_deps() {
         // The order is the interface. A change to it is a change to which
         // failure a contributor is shown first, and it should have to break
         // this line to happen.
         assert_eq!(
             LEGS.iter().map(|leg| leg.name).collect::<Vec<_>>(),
-            ["format", "lint", "build", "test"]
+            ["format", "lint", "build", "test", "deps"]
         );
     }
 
     #[test]
     fn no_arguments_selects_every_leg_in_order() {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
-        assert_eq!(names(&selected), ["format", "lint", "build", "test"]);
+        assert_eq!(
+            names(&selected),
+            ["format", "lint", "build", "test", "deps"]
+        );
     }
 
     #[test]
@@ -383,13 +438,13 @@ mod tests {
             Outcome {
                 passed: vec!["format"],
                 failed: Some("lint"),
-                not_reached: vec!["build", "test"],
+                not_reached: vec!["build", "test", "deps"],
                 not_selected: Vec::new(),
             }
         );
         let report = outcome.report();
         assert!(
-            report.contains("NOT EXAMINED: build, test (the run stopped before them)"),
+            report.contains("NOT EXAMINED: build, test, deps (the run stopped before them)"),
             "{report}"
         );
     }
@@ -400,39 +455,39 @@ mod tests {
         let outcome = run_legs(&selected, LEGS, |_| true);
 
         assert_eq!(outcome.failed, None);
-        assert_eq!(outcome.passed, ["format", "lint", "build", "test"]);
+        assert_eq!(outcome.passed, ["format", "lint", "build", "test", "deps"]);
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         assert_eq!(outcome.not_selected, Vec::<&str>::new());
         let report = outcome.report();
-        assert!(report.contains("4 of 4 leg(s) passed"), "{report}");
+        assert!(report.contains("5 of 5 leg(s) passed"), "{report}");
         assert!(!report.contains("NOT EXAMINED"), "{report}");
     }
 
     #[test]
     fn the_last_leg_failing_leaves_no_selected_leg_unreached() {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
-        let outcome = run_legs(&selected, LEGS, |leg| leg.name != "test");
+        let outcome = run_legs(&selected, LEGS, |leg| leg.name != "deps");
 
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         let report = outcome.report();
         assert!(!report.contains("NOT EXAMINED"), "{report}");
-        assert!(report.contains("stopped at the test leg"), "{report}");
+        assert!(report.contains("stopped at the deps leg"), "{report}");
     }
 
     #[test]
     fn a_run_of_one_leg_names_the_legs_it_was_not_asked_for() {
         // The case this test exists for. An earlier version of the report said
         // "Every other leg had already run" whenever no SELECTED leg was left,
-        // which on a one-leg run was a positive claim about three legs nothing
-        // had touched. Found by running `cargo gate build` against a
+        // which on a one-leg run was a positive claim about every other leg,
+        // none of which anything had touched. Found by running `cargo gate build` against a
         // deliberately broken build and reading the last line.
         let selected = select(&asked(&["build"]), LEGS).expect("build is a leg");
         let outcome = run_legs(&selected, LEGS, |_| false);
 
-        assert_eq!(outcome.not_selected, ["format", "lint", "test"]);
+        assert_eq!(outcome.not_selected, ["format", "lint", "test", "deps"]);
         let report = outcome.report();
         assert!(
-            report.contains("NOT EXAMINED: format, lint, test (not asked for on this run)"),
+            report.contains("NOT EXAMINED: format, lint, test, deps (not asked for on this run)"),
             "{report}"
         );
         assert!(
@@ -454,7 +509,7 @@ mod tests {
             "{report}"
         );
         assert!(
-            report.contains("format, build (not asked for on this run)"),
+            report.contains("format, build, deps (not asked for on this run)"),
             "{report}"
         );
     }
@@ -468,7 +523,68 @@ mod tests {
 
         assert_eq!(outcome.total(), LEGS.len());
         let report = outcome.report();
-        assert!(report.contains("1 of 4 leg(s) passed"), "{report}");
+        assert!(report.contains("1 of 5 leg(s) passed"), "{report}");
+    }
+
+    #[test]
+    fn every_leg_that_resolves_a_dependency_graph_runs_in_locked_mode() {
+        // Without `--locked` a leg may rewrite `Cargo.lock` on the way past and
+        // then judge the graph it just resolved rather than the committed one.
+        // That is the failure #18 is about: the gate's verdict and the tree the
+        // reader has stop being about the same set of versions, and nothing
+        // says so, because the rewritten lockfile is a working-tree change
+        // nobody reads.
+        //
+        // Formatting reads files and resolves nothing, so it is the one leg
+        // where the flag would be meaningless rather than merely unused.
+        for leg in LEGS {
+            let resolves = leg.name != "format";
+            assert_eq!(
+                leg.args.contains(&"--locked"),
+                resolves,
+                "the {} leg: --locked present={}, expected={resolves}",
+                leg.name,
+                leg.args.contains(&"--locked")
+            );
+        }
+    }
+
+    #[test]
+    fn a_leg_needing_a_program_the_toolchain_does_not_ship_says_how_to_get_it() {
+        // `rust-toolchain.toml` names the compiler and the components, and the
+        // rustup shims install those on first use, so a leg built out of them
+        // owes no instruction. The dependency leg is a separate binary. Without
+        // this the whole message a contributor gets is cargo's own "no such
+        // command", which says what is missing and nothing about what to do.
+        for leg in LEGS {
+            match leg.install {
+                // The four subcommands `rust-toolchain.toml` accounts for:
+                // cargo itself, and the two components it names. A leg running
+                // anything else and claiming no installation is the mistake
+                // this arm exists to refuse.
+                None => assert!(
+                    matches!(
+                        leg.args.first(),
+                        Some(&("fmt" | "clippy" | "build" | "test"))
+                    ),
+                    "the {} leg names no installation, so it runs a subcommand the pinned toolchain ships: {:?}",
+                    leg.name,
+                    leg.args.first()
+                ),
+                Some(install) => {
+                    assert!(
+                        install.contains("install"),
+                        "the {} leg's hint is a command that installs something: {install}",
+                        leg.name
+                    );
+                    assert!(
+                        install.contains("--locked"),
+                        "the {} leg's own installation is pinned too: {install}",
+                        leg.name
+                    );
+                }
+            }
+        }
     }
 
     #[test]
