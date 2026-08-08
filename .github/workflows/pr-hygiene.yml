@@ -1,0 +1,185 @@
+# Deterministic pull-request hygiene checks (#24). Adapted from the
+# `Deterministic PR-hygiene checks` context on the reference gate measured in
+# docs/gate-parity.md. This check reasons about the pull request rather than
+# about the code, which is a class no other check in this tree covers.
+#
+# Two tiers, and the tiering is the point. The FAIL tier holds rules where a
+# false positive is close to impossible, and a red run on it is meant to stop the
+# merge once #30 puts this check in the ruleset. The WARN tier holds a
+# convention a legitimate change can exceed, and it never fails. A check that
+# red-flags reasonable changes loses the authority it needs on the day it is
+# right.
+#
+# Nothing is checked out and no code from the pull request is executed. The
+# pull request's own values reach the shell only as environment variables and as
+# the contents of files fetched through the API, never interpolated into the
+# script, so a crafted branch name, title or body cannot become shell.
+name: PR hygiene
+
+on:
+  pull_request:
+    # `edited` is included because two of the rules read the body, and a body
+    # edit that fixes a violation must be able to turn the check green without a
+    # push.
+    types: [opened, synchronize, reopened, edited]
+
+# Deny by default; the job grants only what the two API reads need.
+permissions: {}
+
+# A newer run on the same pull request supersedes an in-flight one. This is a
+# read-only judgement, so cancelling a superseded run is safe.
+concurrency:
+  group: pr-hygiene-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    # This display name is the literal check-run name the branch ruleset's
+    # required set references (#30). Renaming this job silently detaches it from
+    # the ruleset and takes a required check off the gate with it, so a rename
+    # here is a change to the gate rather than a cosmetic edit.
+    name: Deterministic PR-hygiene checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Read the pull request through the API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # The body, and one record per changed file: a marker line carrying the
+          # path and the two line counts, followed by that file's patch. Parsed
+          # by the step below with awk alone, so the judgement can be run outside
+          # a workflow against fabricated input.
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""' > "${RUNNER_TEMP}/body.txt"
+          gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | "@@FILE@@\t\(.filename)\t\(.additions)\t\(.deletions)\n\(.patch // "")"' \
+            > "${RUNNER_TEMP}/files.txt"
+          echo "body lines: $(wc -l < "${RUNNER_TEMP}/body.txt")"
+          # `grep -c` exits 1 on zero matches, which under `set -e` would abort
+          # the step rather than report a pull request that changed no file.
+          echo "changed files: $(grep -c '^@@FILE@@' "${RUNNER_TEMP}/files.txt" || true)"
+
+      - name: Judge it
+        # `W` is the only thing this step takes from the workflow. Everything it
+        # decides comes out of the two files the step above wrote, so the whole
+        # judgement runs outside a workflow against input somebody made up:
+        #
+        #   sed -n '/---8<--- judge begin/,/---8<--- judge end/p' \
+        #     .github/workflows/pr-hygiene.yml | sed 's/^          //' > judge.sh
+        #   W=<dir holding body.txt and files.txt> bash judge.sh
+        #
+        # That is how a rule here is shown to bite without opening a pull request
+        # that breaks it. A check whose only bench is the live tracker is a check
+        # nobody can test a change to.
+        env:
+          W: ${{ runner.temp }}
+        run: |
+          # ---8<--- judge begin
+          set -euo pipefail
+
+          BODY="${W}/body.txt"
+          FILES="${W}/files.txt"
+          FACTS="${W}/facts.tsv"
+
+          # A patch line that adds a test, a patch line that sets a version, the
+          # path of every changed file, and the total churn. A diff's own body
+          # lines are prefixed by '+', '-' or a space, so a line inside a patch
+          # can never match the '^@@FILE@@' marker at column zero.
+          #
+          # A version line counts only inside a Cargo.toml. Cargo.lock carries a
+          # `version = "..."` line for every package in the graph, so without
+          # this restriction adding a single dependency would look like a
+          # version bump and demand a changelog entry - a false positive, in the
+          # tier that exists on the promise of having none.
+          awk -F'\t' -v OFS='\t' '
+            index($0, "@@FILE@@\t") == 1 {
+              file = $2
+              manifest = (file == "Cargo.toml" || file ~ /\/Cargo\.toml$/)
+              churn += $3 + $4
+              print "FILE", file
+              next
+            }
+            file == "" { next }
+            substr($0, 1, 1) == "+" {
+              line = substr($0, 2)
+              if (line ~ /#\[test\]/ || line ~ /#\[cfg\(test\)\]/) { print "ADDTEST", file }
+              if (manifest && line ~ /^version = "/) { print "ADDVERSION", file }
+            }
+            END { print "CHURN", churn + 0 }
+          ' "$FILES" > "$FACTS"
+
+          changed() { awk -F'\t' '$1 == "FILE" { print $2 }' "$FACTS"; }
+          churn() { awk -F'\t' '$1 == "CHURN" { print $2 }' "$FACTS"; }
+
+          fail=0
+          fail_msg() { echo "FAIL  $1"; echo "::error::$1"; fail=1; }
+          warn_msg() { echo "WARN  $1"; echo "::warning::$1"; }
+
+          # Rule 1, FAIL tier. The body names the issue the change closes.
+          # CONTRIBUTING.md: a pull request that closes no issue is a change
+          # whose reason exists only in the head of the person who wrote it.
+          if grep -qiE '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' "$BODY"; then
+            echo "ok    the body names the issue this closes"
+          else
+            fail_msg "The body names no issue. Add a line reading 'Closes #NNN'. Every change starts as an issue; see CONTRIBUTING.md."
+          fi
+
+          # Rule 2, FAIL tier. A change to a reader moves that reader's tests, or
+          # the body says why none was needed. Both a file under the crate's
+          # tests/ directory and an added #[test] beside the code count, because
+          # docs/testing.md puts unit tests in the file they are about.
+          for crate in $(changed | sed -n 's|^crates/readers/\([^/]*\)/.*|\1|p' | sort -u); do
+            evidence=0
+            if changed | grep -qE "^crates/readers/${crate}/tests/"; then evidence=1; fi
+            if awk -F'\t' -v c="crates/readers/${crate}/" \
+                 '$1 == "ADDTEST" && index($2, c) == 1 { found = 1 } END { exit !found }' "$FACTS"; then
+              evidence=1
+            fi
+            if grep -qE "^No test change for ${crate}: .+" "$BODY"; then
+              echo "ok    ${crate} changed with a stated reason for no test change"
+              continue
+            fi
+            if [ "$evidence" -eq 1 ]; then
+              echo "ok    ${crate} changed and its tests moved with it"
+            else
+              fail_msg "crates/readers/${crate} changed and no test moved with it. Add a test, or add a line to the body reading 'No test change for ${crate}: <reason>'."
+            fi
+          done
+
+          # Rule 3, FAIL tier. A version bump carries a changelog entry. The two
+          # version surfaces and what they promise are in
+          # docs/decisions/0010-versioning-and-stability.md.
+          if awk -F'\t' '$1 == "ADDVERSION" { found = 1 } END { exit !found }' "$FACTS"; then
+            bumped=$(awk -F'\t' '$1 == "ADDVERSION" { print $2 }' "$FACTS" | sort -u | tr '\n' ' ')
+            if changed | grep -qx 'CHANGELOG.md'; then
+              echo "ok    version bumped in ${bumped}and the changelog moved with it"
+            else
+              fail_msg "A version is bumped in ${bumped}and CHANGELOG.md is unchanged. A released number nobody can look up is a number a caller cannot act on."
+            fi
+          fi
+
+          # The WARN tier. Never fails. Four hundred changed lines is where a
+          # reviewer stops reading carefully, and the usual repair is to re-plan
+          # the issue into smaller ones rather than to claim an exception. A bulk
+          # rename, a generated table or a first import legitimately exceeds any
+          # cap, which is why this warns.
+          total=$(churn)
+          if [ "${total:-0}" -gt 400 ]; then
+            warn_msg "${total} changed lines, over the 400-line reading cap. This usually means the issue was scoped wrong and should be re-planned into smaller ones. It does not fail the check."
+          else
+            echo "ok    ${total:-0} changed lines, inside the 400-line reading cap"
+          fi
+
+          echo
+          if [ "$fail" -ne 0 ]; then
+            echo "Refused on the FAIL tier. The WARN tier above, if any, is advisory and did not contribute."
+            exit 1
+          fi
+          echo "Both tiers clear."
+          # ---8<--- judge end
