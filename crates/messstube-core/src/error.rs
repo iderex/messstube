@@ -279,10 +279,7 @@ mod tests {
 
     #[test]
     fn a_complete_outcome_has_no_losses_and_a_lossy_one_is_not_complete() {
-        let empty = Measurement {
-            channels: Vec::new(),
-            axes: Vec::new(),
-        };
+        let empty = Measurement::new(Vec::new(), Vec::new());
 
         let whole = ReadOutcome::complete(empty.clone());
         assert!(whole.is_complete());

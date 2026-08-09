@@ -15,8 +15,14 @@
 //! holds them, from #32. No reader is compiled in yet, so the registry there is
 //! empty; the first reader is #48.
 //!
-//! Identification over a bounded prefix is #33. Its module layout is left to
-//! that issue rather than guessed at here.
+//! [`read`] is the path a caller uses instead of calling a reader directly, and
+//! [`provenance`] is what that path attaches to every measurement it produces,
+//! both from #36. The content hash in the block is [`hash`], written out here
+//! rather than taken from a crate for the reason that module gives.
+//!
+//! Identification over a bounded prefix is #33, which is what will choose the
+//! reader [`read::read_with`] is told to use. Its module layout is left to that
+//! issue rather than guessed at here.
 //!
 //! The shape of this crate's public interface is constrained by
 //! `docs/decisions/0002-product-surface.md`: plain owned data rather than
@@ -31,7 +37,10 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+pub mod hash;
 pub mod measurement;
+pub mod provenance;
+pub mod read;
 pub mod reader;
 pub mod unit;
 
