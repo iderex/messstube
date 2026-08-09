@@ -221,6 +221,23 @@ the reference drew itself and the one this page is built on: the ruleset is what
 actually stands between a change and the mainline, a comment describing it drifts,
 and the way to know which checks are required is to print them.
 
+## What a green gate here does not mean
+
+Parity with the reference is one half of an honest page. The other half is what
+this gate cannot reach at all, whatever colour it comes out. These are limits
+rather than gaps to be closed: each one is here because closing it would cost
+more than it is worth, and each is covered somewhere that says so when it has not
+run.
+
+| What is outside the gate | Why it is outside | Where it is covered instead |
+| --- | --- | --- |
+| Hardware-attached behaviour: anything that needs an instrument, a serial port or any other device | `docs/decisions/0011-headless-testing.md` keeps an attached instrument out of the default suite, and a gate that can be blocked by a cable is a gate that gets bypassed. No merge waits on an instrument. | The hardware harness, `crates/harness-needs-serial-port`, run by hand with a rig present. The gate compiles and lints it and never runs it, and a test in it refuses if the gate verb or any workflow ever names it. #43 |
+
+That last row is a real gap in coverage and it is the price
+`docs/decisions/0011-headless-testing.md` names and accepts. What keeps it from
+being a quiet one is that the harness prints what it needed and what went
+uncovered every time it cannot run, so a skip is never readable as a pass.
+
 ## Keeping this page true
 
 The reference gate moves, so re-run the two commands under "The measurement"

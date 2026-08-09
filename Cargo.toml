@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/messstube-core", "crates/messstube-cli", "xtask"]
+members = [
+    "crates/messstube-core",
+    "crates/messstube-cli",
+    "crates/harness-needs-serial-port",
+    "xtask",
+]
 
 # `xtask` is a workspace member rather than a directory beside it, so that the
 # gate verb is formatted, linted, built and tested by the legs it runs. A gate
