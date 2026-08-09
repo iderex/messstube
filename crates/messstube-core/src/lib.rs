@@ -20,6 +20,10 @@
 //! both from #36. The content hash in the block is [`hash`], written out here
 //! rather than taken from a crate for the reason that module gives.
 //!
+//! [`write`] is the other end: the delimited sample table and the metadata
+//! document 0008 fixes as what the core writes, from #38. Both are plain text,
+//! both take no dependency, and both produce the same bytes on every machine.
+//!
 //! Identification over a bounded prefix is #33, which is what will choose the
 //! reader [`read::read_with`] is told to use. Its module layout is left to that
 //! issue rather than guessed at here.
@@ -43,6 +47,7 @@ pub mod provenance;
 pub mod read;
 pub mod reader;
 pub mod unit;
+pub mod write;
 
 #[cfg(test)]
 mod tests {
