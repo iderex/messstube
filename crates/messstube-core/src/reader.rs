@@ -480,10 +480,7 @@ mod tests {
         // The interface is the join between #31 and #34: a measurement or one of
         // the two error kinds, and no third shape invented at this seam.
         fn accepts(_: Result<ReadOutcome, ReadError>) {}
-        let empty = Measurement {
-            channels: Vec::new(),
-            axes: Vec::new(),
-        };
+        let empty = Measurement::new(Vec::new(), Vec::new());
         accepts(Ok(ReadOutcome::complete(empty)));
     }
 }

@@ -50,8 +50,8 @@ fn a_caller_can_build_a_measurement_and_read_a_physical_value_from_it() {
     };
     use messstube_core::unit::Unit;
 
-    let measurement = Measurement {
-        channels: vec![Channel {
+    let measurement = Measurement::new(
+        vec![Channel {
             name: "Ch2".to_owned(),
             unit: Unit::Volt,
             // Two sixteen-bit codes, unscaled and unshifted as the file held
@@ -63,7 +63,7 @@ fn a_caller_can_build_a_measurement_and_read_a_physical_value_from_it() {
             },
             uncertainty: Some(Uncertainty::Absolute(0.001)),
         }],
-        axes: vec![Axis {
+        vec![Axis {
             name: "time".to_owned(),
             unit: Unit::Second,
             shape: AxisShape::Regular {
@@ -72,7 +72,7 @@ fn a_caller_can_build_a_measurement_and_read_a_physical_value_from_it() {
                 count: 2,
             },
         }],
-    };
+    );
 
     let channel = measurement
         .channels

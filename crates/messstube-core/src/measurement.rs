@@ -39,6 +39,7 @@
 //! deliberately left to #59, and inventing an answer inside the type work would
 //! be taking a decision in the place where it is least visible.
 
+use crate::provenance::{Instrument, Provenance};
 use crate::unit::Unit;
 
 /// What one read produced.
@@ -47,10 +48,18 @@ use crate::unit::Unit;
 /// every channel sit on, in order, so a channel of a two-dimensional scan has
 /// two axes and its samples are laid out with the last axis varying fastest.
 ///
-/// There is no provenance field yet, and 0004 requires one. The provenance block
-/// is #36, which builds it in the read path rather than in a reader, and it is
-/// that issue rather than this one that adds the field. Until it lands this type
-/// carries what a reader produces and not yet what the read path attaches to it.
+/// The provenance block 0004 requires is here and is not writable from outside
+/// this crate. [`read_with`](crate::read::read_with) attaches it; a reader
+/// supplies [`instrument`](Measurement::instrument) and nothing else of it. That
+/// is #36's requirement that a reader can neither forget the block nor fill it
+/// in wrongly, held by the type rather than by a review:
+///
+/// ```compile_fail
+/// use messstube_core::measurement::Measurement;
+///
+/// let mut measurement = Measurement::new(Vec::new(), Vec::new());
+/// measurement.provenance = None;
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Measurement {
     /// One or more named channels. A model assuming exactly one is rejected by
@@ -58,6 +67,48 @@ pub struct Measurement {
     pub channels: Vec<Channel>,
     /// The axes the samples sit on, outermost first.
     pub axes: Vec<Axis>,
+    /// What the file said about the instrument that wrote it, which is the one
+    /// part of the provenance block a reader is the source of. `None` where the
+    /// format carries no identification, and never a guess.
+    pub instrument: Option<Instrument>,
+    /// Where this came from. Private, and the read path is the only writer.
+    ///
+    /// `None` on a measurement that came straight out of a reader without going
+    /// through the read path, which is a thing a caller can do and a thing this
+    /// library never does. Reading through [`read_with`](crate::read::read_with)
+    /// always produces `Some`, and
+    /// `every_measurement_off_the_read_path_carries_a_block` in
+    /// `crates/messstube-core/tests/provenance.rs` is where that is asserted.
+    provenance: Option<Provenance>,
+}
+
+impl Measurement {
+    /// What a reader hands back: channels, axes and nothing attached yet.
+    ///
+    /// A constructor rather than a struct literal, because the provenance field
+    /// is private and a literal outside this crate could not name it. That is
+    /// the mechanism, and this function is what keeps it from also being an
+    /// obstacle to writing a reader.
+    #[must_use]
+    pub const fn new(channels: Vec<Channel>, axes: Vec<Axis>) -> Self {
+        Measurement {
+            channels,
+            axes,
+            instrument: None,
+            provenance: None,
+        }
+    }
+
+    /// Where this measurement came from, where it came through the read path.
+    #[must_use]
+    pub const fn provenance(&self) -> Option<&Provenance> {
+        self.provenance.as_ref()
+    }
+
+    /// Attach the block. Inside this crate only, and called by the read path.
+    pub(crate) fn attach(&mut self, provenance: Provenance) {
+        self.provenance = Some(provenance);
+    }
 }
 
 /// One named channel of samples.
@@ -512,8 +563,8 @@ mod tests {
                 count: 2,
             },
         };
-        let measurement = Measurement {
-            channels: vec![
+        let measurement = Measurement::new(
+            vec![
                 Channel {
                     name: "Ch1".to_owned(),
                     unit: Unit::Volt,
@@ -529,8 +580,8 @@ mod tests {
                     uncertainty: None,
                 },
             ],
-            axes: vec![axis],
-        };
+            vec![axis],
+        );
 
         assert_eq!(measurement.channels.len(), 2);
         assert_eq!(measurement.axes.len(), 1);

@@ -231,9 +231,9 @@ fn read_fixture(bytes: &[u8], options: ReadOptions) -> Result<ReadOutcome, ReadE
     }
 
     let length = channels.first().map_or(0, |channel| channel.samples.len());
-    let measurement = Measurement {
+    let measurement = Measurement::new(
         channels,
-        axes: vec![Axis {
+        vec![Axis {
             name: "sample".to_owned(),
             unit: Unit::Dimensionless,
             shape: AxisShape::Regular {
@@ -242,7 +242,7 @@ fn read_fixture(bytes: &[u8], options: ReadOptions) -> Result<ReadOutcome, ReadE
                 count: length,
             },
         }],
-    };
+    );
 
     Ok(ReadOutcome {
         measurement,
