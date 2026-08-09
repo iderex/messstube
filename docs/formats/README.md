@@ -9,5 +9,12 @@ The machine-readable description of the format lives beside its note in this
 directory, because the note is documentation of the format rather than of this
 repository's code and the two are meant to travel together.
 
-Nothing is here yet. #47 writes the first note and #52 adds the first operator
-section to it.
+One note is here. `tektronix-isf.md` describes the first format, chosen in
+`docs/decisions/0013-first-format.md`, with `tektronix-isf.json` beside it as the
+machine-readable half. It carries no operator section: that section pastes real
+output from a tool run against a real file, there is no reader for this format
+yet, and #52 is where it is added to that file.
+
+A note is written before its reader, so a statement in one is backed by a
+document or by bytes and never by this repository's code. The three words a
+statement carries are set out in the note itself.
