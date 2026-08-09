@@ -1,6 +1,17 @@
 [package]
 name = "harness-needs-serial-port"
-version = "0.0.0"
+# NO `version` FIELD, AND THE OMISSION IS DELIBERATE. Cargo defaults an absent
+# version to 0.0.0, which is what this unpublished crate would have declared
+# anyway. What writing it out would cost is a false verdict: the pull-request
+# hygiene check reads any added `version = "` line in a manifest as a version
+# bump and refuses the change unless CHANGELOG.md moves with it.
+#
+#     FAIL  A version is bumped in crates/harness-needs-serial-port/Cargo.toml
+#           and CHANGELOG.md is unchanged.
+#
+# A crate arriving for the first time is not a bump, and there is no changelog
+# in this tree to move: that file is #70, in the release milestone. The rule
+# cannot tell the two apart today and the repair belongs to whoever holds it.
 description = "The hardware harness for an instrument on a serial port. Never run by the gate."
 edition.workspace = true
 rust-version.workspace = true
