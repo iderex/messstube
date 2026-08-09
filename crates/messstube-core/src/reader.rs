@@ -315,6 +315,25 @@ impl Registry {
             .collect()
     }
 
+    /// The reader that answers to an identifier.
+    ///
+    /// What identification hands back is a description, which is owned data a
+    /// caller in another language can hold. Reading the file needs the reader
+    /// itself, and this is the one place the two are joined, so a caller never
+    /// has to keep a reader alive alongside the answer.
+    ///
+    /// The FIRST match, and [`duplicate_identifiers`](Registry::duplicate_identifiers)
+    /// is what stops there being a second. Two readers under one identifier
+    /// would make this answer depend on link order, which is why that is a
+    /// property the suite requires of any registry this repository ships.
+    #[must_use]
+    pub fn reader(&self, id: &str) -> Option<&'static dyn Reader> {
+        self.entries
+            .iter()
+            .copied()
+            .find(|reader| reader.id() == id)
+    }
+
     /// The identifiers more than one reader in this registry declares.
     ///
     /// Empty where every identifier is unique, which is the state the suite
