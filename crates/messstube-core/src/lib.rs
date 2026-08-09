@@ -15,6 +15,13 @@
 //! holds them, from #32. No reader is compiled in yet, so the registry there is
 //! empty; the first reader is #48.
 //!
+//! [`bounded`] is what reader code reads through, from #35: the cursor that
+//! cannot leave the bytes it was given, the allocation that is checked against
+//! the file before anything is reserved, the depth guard and the bounded string
+//! reader. It is the hostile-input budget in
+//! `docs/decisions/0007-hostile-input-budget.md` as one implementation rather
+//! than as a rule every reader author has to remember.
+//!
 //! [`read`] is the path a caller uses instead of calling a reader directly, and
 //! [`provenance`] is what that path attaches to every measurement it produces,
 //! both from #36. The content hash in the block is [`hash`], written out here
@@ -40,6 +47,7 @@
 // by an attribute somebody adds in a hurry.
 #![forbid(unsafe_code)]
 
+pub mod bounded;
 pub mod error;
 pub mod hash;
 pub mod measurement;
