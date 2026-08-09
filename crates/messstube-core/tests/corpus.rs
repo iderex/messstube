@@ -42,6 +42,8 @@
 #![forbid(unsafe_code)]
 
 use messstube_core::hash::digest_of;
+use messstube_core::identify::{Identification, identify};
+use messstube_core::reader::COMPILED_IN;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -415,6 +417,37 @@ fn files_under(root: &Path) -> Result<Vec<String>, String> {
     Ok(found)
 }
 
+/// Whether a corpus file was claimed by exactly one reader.
+///
+/// THE PROPERTY THAT GROWS TEETH AS THE CORPUS GROWS, from #33. Two readers
+/// claiming one file is a defect in this repository rather than in the file:
+/// one of the two recognition rules is too broad, and the day it is added is
+/// the day this catches it. No reader claiming a corpus file is the opposite
+/// mistake, a rule narrowed until it stopped matching the file it was written
+/// for, and it is also what an index entry for a format nothing here reads
+/// looks like.
+///
+/// A pure function over the answer, so the property is proved without a corpus
+/// and without a registry. The only thing the real run adds is where the
+/// answer came from.
+fn claimant_disagreement(entry: &Entry, answer: &Identification) -> Option<String> {
+    match answer {
+        Identification::Recognised(_) => None,
+        Identification::Ambiguous(claimants) => {
+            let named: Vec<&str> = claimants.iter().map(|info| info.id.as_str()).collect();
+            Some(format!(
+                "{} is claimed by more than one reader: {}. One of those recognition rules is too broad.",
+                entry.id,
+                named.join(", ")
+            ))
+        }
+        Identification::Unrecognised => Some(format!(
+            "{} is claimed by no reader. Either a recognition rule was narrowed until it stopped matching, or the file is in the corpus ahead of the reader it is there to verify.",
+            entry.id
+        )),
+    }
+}
+
 /// One proof that a refusal bites, paired with the near-miss it may not refuse.
 struct Proof {
     /// What is being proved, in the words the report prints.
@@ -656,6 +689,44 @@ const PROOFS: &[Proof] = &[
         },
     },
     Proof {
+        what: "a corpus file two readers claim is refused, and one claimant is not",
+        run: || {
+            use messstube_core::reader::{Family, Maturity, ReaderInfo};
+            let entry = valid_entry()?;
+            let described = |id: &str| ReaderInfo {
+                id: id.to_owned(),
+                name: format!("the {id} fixture"),
+                family: Family::Oscilloscope,
+                maturity: Maturity::Sketched,
+                extensions: Vec::new(),
+            };
+
+            let two = Identification::Ambiguous(vec![described("alpha"), described("loose")]);
+            let found = claimant_disagreement(&entry, &two);
+            match found {
+                Some(ref said) if said.contains("alpha") && said.contains("loose") => {}
+                other => {
+                    return Err(format!(
+                        "an ambiguity was not refused, or named nobody: {other:?}"
+                    ));
+                }
+            }
+
+            let none = Identification::Unrecognised;
+            if claimant_disagreement(&entry, &none).is_none() {
+                return Err("a file no reader claims was accepted".to_owned());
+            }
+
+            // The near miss: exactly one claimant, which is the state every
+            // corpus file is supposed to be in and which may not be refused.
+            let one = Identification::Recognised(described("alpha"));
+            match claimant_disagreement(&entry, &one) {
+                None => Ok(()),
+                Some(said) => Err(format!("one claimant was refused: {said}")),
+            }
+        },
+    },
+    Proof {
         what: "an independent-value route that is not one of the two is refused",
         run: || {
             refused_because(
@@ -738,6 +809,14 @@ fn main() -> ExitCode {
                                 verified = verified.saturating_add(1);
                             }
                             for disagreement in found {
+                                failed.push(disagreement);
+                            }
+                            // And which reader claims it. The prefix comes from
+                            // the bytes already read rather than from a second
+                            // open, and `identify` bounds it again on the way
+                            // in.
+                            let answer = identify(COMPILED_IN, &bytes, Some(&entry.file));
+                            if let Some(disagreement) = claimant_disagreement(entry, &answer) {
                                 failed.push(disagreement);
                             }
                         }
