@@ -1,0 +1,36 @@
+[package]
+name = "corpus-fetch"
+version = "0.0.0"
+description = "Obtains the external tier of the verification corpus and verifies it against the index."
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "corpus-fetch"
+path = "src/main.rs"
+
+# `messstube-core` for the digest, and nothing else. The alternative was a second
+# implementation of SHA-256 in this repository, which is the one thing a corpus
+# tool may not have: the check in the suite and the command that fetches would
+# then be agreeing with each other rather than with the standard.
+#
+# This is a separate crate rather than a second binary inside `xtask` so that the
+# gate verb keeps the property its own manifest states, that it has no
+# dependencies and cannot fail for a reason unrelated to the code it judges.
+#
+# The version is written next to the path because a path dependency without one
+# is a wildcard requirement, and `deny.toml` refuses those with
+# `allow-wildcard-paths = false`. Measured rather than guessed at:
+#
+#     cargo deny --locked check
+#     error[wildcard]: found 1 wildcard dependency for crate 'corpus-fetch'
+[dependencies]
+messstube-core = { path = "../messstube-core", version = "0.0.0" }
+
+# The lint set is the workspace's, in the root Cargo.toml. A crate that wrote
+# its own would be a crate that differs from the others on a decision rather than
+# on a preference.
+[lints]
+workspace = true
