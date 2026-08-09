@@ -12,6 +12,9 @@ dependencies = [
 [[package]]
 name = "messstube-cli"
 version = "0.0.0"
+dependencies = [
+ "messstube-core",
+]
 
 [[package]]
 name = "messstube-core"

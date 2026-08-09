@@ -12,6 +12,10 @@ name = "messstube"
 path = "src/main.rs"
 
 [dependencies]
+# The library, because the tool is a surface over it and holds no format
+# knowledge of its own. The version is written out beside the path because
+# deny.toml refuses a wildcard requirement and sets allow-wildcard-paths = false.
+messstube-core = { path = "../messstube-core", version = "0.0.0" }
 
 # The lint set is the workspace's, in the root Cargo.toml. A crate that wrote
 # its own would be a crate that differs from the others on a decision rather than
