@@ -1,0 +1,36 @@
+[package]
+name = "harness-needs-serial-port"
+version = "0.0.0"
+description = "The hardware harness for an instrument on a serial port. Never run by the gate."
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The name states the hardware, and it is the name somebody types. A harness
+# called "integration" or "slow" is one whose summary line can be read as having
+# covered the offline case, which is the confusion #43 exists to prevent.
+[[bin]]
+name = "harness-needs-serial-port"
+path = "src/main.rs"
+
+[dependencies]
+# The library, because one of the two things this harness needs is a reader to
+# hand the instrument's bytes to, and the only honest way to report whether it
+# has one is to ask the registry that would hold it.
+#
+# The version is written out beside the path, and it is not decoration. deny.toml
+# refuses a wildcard requirement and sets `allow-wildcard-paths = false`, so a
+# path dependency with no version is refused by the gate's dependency leg:
+#
+#     cargo deny --locked check bans
+#     error[wildcard]: found 1 wildcard dependency for crate 'harness-needs-serial-port'
+#
+# That policy is deliberate and the repair belongs here rather than in it.
+messstube-core = { path = "../messstube-core", version = "0.0.0" }
+
+# The lint set is the workspace's, in the root Cargo.toml. A crate that wrote
+# its own would be a crate that differs from the others on a decision rather than
+# on a preference.
+[lints]
+workspace = true

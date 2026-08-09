@@ -61,6 +61,75 @@ hardware harness follows in `docs/decisions/0011-headless-testing.md`.
 The worked example is `crates/messstube-core/tests/corpus.rs`. It carries one
 case today and the corpus is not present, so a run prints one skip.
 
+## The hardware harness, which is not one of the three
+
+Some behaviour can only be observed on the instrument. A controller that streams
+over a serial link, a digitiser whose saved file differs from what its front
+panel exports, a rig whose firmware writes a field the documentation does not
+mention. None of that can be a test in the default suite, because
+`docs/decisions/0011-headless-testing.md` keeps an attached instrument out of it,
+and that decision is a floor rather than a preference.
+
+So it moves rather than being abandoned. A harness is a crate of its own under
+`crates/`, and its name states the hardware it requires. The first one is
+`harness-needs-serial-port`, and it is run by naming it:
+
+    cargo run --package harness-needs-serial-port -- --port COM3
+
+Not slow, not extended, not integration. The word somebody types says what the
+run needed, so that no summary line naming it can be read as having covered the
+offline case. A harness needing a different rig is a second crate under a second
+such name.
+
+The gate compiles it, lints it and runs the unit tests over its reporting, and it
+never runs the harness itself. Those are different things. Compiling it is what
+stops it rotting into a target that no longer builds; running it is what would
+make a merge wait on a cable. The exclusion is checked rather than remembered:
+`no_route_in_this_tree_runs_the_harness` reads the gate verb and every workflow
+file and refuses if either names the binary, so adding it to a gate or a schedule
+reds the suite rather than quietly changing what a green check means.
+
+Invoked without what it needs, it says which harness it is, what it needed, that
+it did not run, and what having it would have covered, and it exits non-zero. A
+harness that prints nothing when it cannot run is indistinguishable from one that
+ran and passed, and a zero exit is what a script reads as a run that succeeded.
+
+Nothing in a harness may ask for an elevated prompt. Where a path would need one,
+it is reported as uncovered rather than worked around, which is the same answer
+the harness gives for hardware it does not have. That is also why the port is
+named on the command line rather than found by probing the machine.
+
+## From a harness run to a corpus entry
+
+What a harness produces is a corpus entry, not a verdict. This is the route, and
+it is the reason the harness is not a permanent second suite: it is how
+hardware-only knowledge becomes something the default suite can check without the
+hardware.
+
+1. Run the harness with the rig in front of you, naming what it needs. What it
+   observes that no file can hold, such as an export from the front panel
+   disagreeing with the saved file, is written down as it is observed.
+2. Recover the file the instrument wrote. It is the artefact; a transcript of
+   what the harness saw is not.
+3. Take it through the five rules in `docs/corpus.md` before it goes anywhere.
+   The personal-content rule is the one this route trips most often, because a
+   file recovered from an acquisition machine carries the account name in its
+   save path. Redact in place, keeping the length, and note which fields.
+4. Put the file under `corpus/files/` and write its entry into
+   `corpus/index.txt`, with the instrument and firmware the harness run knows
+   first-hand, who provided it, the terms, the date, what it measures, what it is
+   there to prove, whether it was redacted, and its digest and length.
+5. Write the corpus test that asserts what the harness observed. From here the
+   default suite covers that behaviour on every machine, with no instrument and
+   no harness.
+6. Anything the run found that the file does not explain goes into the format
+   note for that format, under what is not understood. A finding that lives only
+   in somebody's memory of an afternoon with a rig is a finding that is lost.
+
+Step 5 is the one that makes the rest worth doing. Until it is taken, the
+knowledge is in a person and not in the repository, and the harness has to be run
+again to learn the same thing.
+
 ## How fixture bytes get into the tree
 
 A small hostile input is written as an escaped byte-string literal in the source.
