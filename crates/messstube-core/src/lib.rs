@@ -31,9 +31,11 @@
 //! document 0008 fixes as what the core writes, from #38. Both are plain text,
 //! both take no dependency, and both produce the same bytes on every machine.
 //!
-//! Identification over a bounded prefix is #33, which is what will choose the
-//! reader [`read::read_with`] is told to use. Its module layout is left to that
-//! issue rather than guessed at here.
+//! [`identify`] is what chooses the reader [`read::read_with`] is told to use,
+//! from #33. It runs every recognition predicate over one bounded prefix and
+//! answers one of three ways: exactly one reader claims the file, several do
+//! and it names all of them, or none does. The last two are refusals and a
+//! caller acts on them differently.
 //!
 //! The shape of this crate's public interface is constrained by
 //! `docs/decisions/0002-product-surface.md`: plain owned data rather than
@@ -50,6 +52,7 @@
 pub mod bounded;
 pub mod error;
 pub mod hash;
+pub mod identify;
 pub mod measurement;
 pub mod provenance;
 pub mod read;

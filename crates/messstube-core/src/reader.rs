@@ -164,6 +164,22 @@ pub trait Reader: Sync {
     /// corpus.
     fn maturity(&self) -> Maturity;
 
+    /// The file extensions this format is usually saved under, lower-cased and
+    /// without their dots.
+    ///
+    /// A HINT AND NEVER AN ANSWER. Identification decides on the bytes; this
+    /// only puts the likely reader at the front of a list a person reads, in
+    /// [`identify`](crate::identify::identify). A reader declaring an extension
+    /// gains no claim on a file that carries it, and a reader declaring none
+    /// loses nothing, which is why the default is none: an instrument file
+    /// often has no extension at all, and several families share `.dat`.
+    ///
+    /// Defaulted rather than required, from #33, so that a reader with nothing
+    /// useful to say here says nothing rather than inventing a suffix.
+    fn extensions(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Whether this reader claims the file, judged on at most
     /// [`RECOGNITION_PREFIX`] bytes from its start.
     ///
@@ -205,6 +221,8 @@ pub struct ReaderInfo {
     pub family: Family,
     /// What evidence stands behind it.
     pub maturity: Maturity,
+    /// The extensions it declares, which order an answer and never decide one.
+    pub extensions: Vec<String>,
 }
 
 /// The readers compiled into this build.
@@ -266,6 +284,33 @@ impl Registry {
                 name: reader.name(),
                 family: reader.family(),
                 maturity: reader.maturity(),
+                extensions: reader.extensions(),
+            })
+            .collect()
+    }
+
+    /// Every reader in this registry that claims these bytes.
+    ///
+    /// EVERY predicate is asked, and there is no early exit. An ambiguity is
+    /// only visible if the second claimant was asked, and taking the first
+    /// match would make the answer depend on link order for exactly the files
+    /// where two rules overlap. What to do with more than one is
+    /// [`identify`](crate::identify::identify)'s decision, not this one's.
+    ///
+    /// The prefix is the caller's, bounded by
+    /// [`RECOGNITION_PREFIX`] on the way in.
+    #[must_use]
+    pub fn claimants(&self, prefix: &[u8]) -> Vec<ReaderInfo> {
+        let shown = prefix.get(..RECOGNITION_PREFIX).unwrap_or(prefix);
+        self.entries
+            .iter()
+            .filter(|reader| reader.recognises(shown))
+            .map(|reader| ReaderInfo {
+                id: reader.id(),
+                name: reader.name(),
+                family: reader.family(),
+                maturity: reader.maturity(),
+                extensions: reader.extensions(),
             })
             .collect()
     }
@@ -316,6 +361,10 @@ impl Registry {
                 name,
                 family,
                 maturity,
+                // The table names what a reader is and how far it is trusted.
+                // An extension is a hint identification uses and not something
+                // a person choosing a reader acts on.
+                extensions: _,
             } = info;
             // Writing into a `String` has no error path, so there is no result
             // worth carrying: `write_str` under it returns `Ok` unconditionally.
@@ -411,6 +460,7 @@ mod tests {
                 name: "the first fixture".to_owned(),
                 family: Family::Oscilloscope,
                 maturity: Maturity::Sketched,
+                extensions: Vec::new(),
             })
         );
     }
