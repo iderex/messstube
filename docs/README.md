@@ -31,7 +31,9 @@ comparison. It is on `main`.
 get into the tree, and where an expected value has to come from. #16 writes it.
 
 `corpus.md` is what a real instrument file has to satisfy before it joins the
-verification corpus. #39 and #40 write it.
+verification corpus. The five acceptance rules and the redaction rule are on
+`main`. #39 adds the index format and the check that the files and the index
+agree.
 
 `data-protection.md` is the data protection statement and the mechanisms that
 hold each part of it. #61 and #62 write it.
