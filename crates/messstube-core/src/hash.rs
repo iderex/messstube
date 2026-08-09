@@ -80,9 +80,14 @@ impl fmt::Display for ContentHash {
 /// a `&mut dyn Source` to a parameter of that type is a trait upcast, and that
 /// is not accepted by the oldest compiler `Cargo.toml` declares support for. A
 /// generic costs nothing here and keeps the floor where it was set.
-pub(crate) fn digest_of<R: Read + ?Sized>(
-    source: &mut R,
-) -> Result<(ContentHash, u64), std::io::Error> {
+///
+/// PUBLIC SINCE #39, AND THE REASON IS THAT THE SECOND CALLER IS OUTSIDE THIS
+/// CRATE. The corpus index carries a digest per file and the check that compares
+/// the two lives in a test target, which is a separate crate and can reach only
+/// the public interface. The alternative was a second implementation of the same
+/// primitive for the check to use, and two implementations of a hash agreeing is
+/// a thing somebody has to keep true rather than a thing that is.
+pub fn digest_of<R: Read + ?Sized>(source: &mut R) -> Result<(ContentHash, u64), std::io::Error> {
     let mut state = Sha256::new();
     // Eight kilobytes, which is a page or two and not tuned. The input is a
     // measurement file on somebody's disk and the hash is not the slow part of

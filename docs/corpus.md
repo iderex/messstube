@@ -13,9 +13,10 @@ a specification says what the instrument was meant to write and the file says
 what it wrote. That makes the corpus part of the evidence, and the same care
 belongs on what goes into it as on the readers it judges.
 
-The index format, the check that the files and the index agree, and where the
-files physically live are #39, and that issue writes its half of this page. What
-is below is what a file has to satisfy, which is #40.
+The page has two halves and they were written by two issues. What a file has to
+satisfy is #40 and is the section below. The index format, the check that the
+files and the index agree, and where the files physically live are #39 and are
+the sections after it.
 
 ## The five rules
 
@@ -122,4 +123,128 @@ there to prove. A file with no entry cannot satisfy the five rules above, becaus
 four of them are satisfied by what the entry says.
 
 What an entry looks like, and the check that refuses a file with no entry and an
-entry with no file, are #39.
+entry with no file, are below.
+
+## Where the index is and where the files are
+
+The index is `corpus/index.txt` and it is committed to this repository. The files
+are under `corpus/files/` and they may not be.
+
+That split is the whole answer to a question entry 2 of #1 has not settled. The
+index is the artefact: it says which files the readers here were verified
+against, which instruments those came from and on what terms, and somebody
+reading this repository can check all of that on a machine holding none of the
+files. Whether the files themselves ship, sit in a second repository, or are
+fetched one at a time is a decision that changes a directory and no entry.
+
+Nothing in an entry names a path into this repository. A file is named by a path
+relative to the files directory, and where that directory is written down once,
+in `CORPUS_ROOT` and `FILES_DIRECTORY` in
+`crates/messstube-core/tests/corpus.rs`. Moving the corpus is a change to those
+two lines.
+
+The digest is what makes that safe rather than merely tidy. A file is identified
+by what it contains and not by where it was found, so a file that has been moved
+is the same file and a file that has been replaced is not, wherever either one
+sits.
+
+## The format of the index
+
+Plain text, one block per file, read by hand and by the check with equal ease.
+
+A line whose first character is `#` is a comment. A blank line ends a block.
+Every other line is a field, written as `name: value`, and the value is
+everything after the first colon with the surrounding spaces removed.
+
+There is no dependency behind that choice and no serialisation format to agree
+on. The index is read by one check today and by the verification ledger in #45
+later, and both are in this tree; adding a parser for somebody else's format to
+this workspace would be the first dependency it carries, taken for a file with
+thirteen fields.
+
+The thirteen fields, all of them required on every entry:
+
+| Field | What it holds |
+| --- | --- |
+| `id` | The stable identifier, unique across the index. |
+| `file` | The path, relative to the files directory. |
+| `hash` | The digest, written `SHA-256:` and sixty-four lower-case hexadecimal characters. |
+| `bytes` | The length, in bytes, that the digest was taken over. |
+| `instrument` | The instrument that produced the file, including the model. |
+| `firmware` | The firmware version, or `unknown` where it is not known. |
+| `provided-by` | The institution or person the file came from. |
+| `terms` | On what basis the file may be here. |
+| `arrived` | The date it arrived, as `YYYY-MM-DD`. |
+| `measures` | What the file is a measurement of. |
+| `proves` | What it is there to prove, which is the Purpose rule above. |
+| `redacted` | `no`, or the fields that were edited, by name. |
+| `independent-value` | `none`, `vendor export` or `independent implementation`. |
+
+Every one of them is required rather than optional, because four of the five
+rules above are satisfied by what the entry says and an entry omitting a field is
+a file nobody checked against that rule.
+
+The list is closed in both directions. A missing field is refused and so is a
+field name that is not on it, so that `term:` written for `terms:` is a refusal
+rather than a value that silently went nowhere.
+
+Three fields carry a fixed shape rather than free text, and each is refused when
+it does not have it. `hash` names its algorithm, because a digest recorded
+without one cannot be checked once a second algorithm exists and the corpus is
+meant to outlast that. `arrived` is a calendar date, because `9.8.26` sorts
+wrongly and means two things in two countries. `independent-value` says one of
+three words, because #45 generates the verification ledger from that field and a
+spelling somebody invented is a file the ledger counts as unverified without
+saying so.
+
+`file` is refused unless it is a relative path that stays inside the corpus. A
+leading slash, a backslash, a drive letter and `..` are all refused rather than
+translated, because an index written on one machine is read on another and the
+check follows whatever the entry names.
+
+## The two directions
+
+A file in the corpus with no entry is a failure. An entry naming a file that is
+not in the corpus is a failure. Both, on every run.
+
+The two hide opposite problems. A file with no entry is a file whose terms and
+provenance nobody recorded, which is exactly what the rules above are for. An
+entry with no file is an index that has drifted from what is there, and it is the
+one that makes a corpus test quietly cover less than it says. A check that looks
+one way lets one of them stand permanently.
+
+Every file that is present is hashed on every run and compared with its entry,
+and so is its length. A digest that does not match the bytes is a failure. This
+is what a corpus test rests on: a test asserting that a file parses to particular
+numbers is a claim about a specific sequence of bytes, and without the digest the
+file can be replaced and the test goes on passing about something else.
+
+## Absence is a skip and disagreement is a failure
+
+The corpus may not be on the machine running the suite, and that is not a
+failure. What it must never be is invisible.
+
+The two states are told apart by one question: whether the files directory exists
+at all. Where it does not, the corpus is not here, and the run prints how many
+entries it could not check and names them. Where it does, the corpus is claimed
+to be here and both directions have to hold exactly, with no entry excused for
+being inconvenient.
+
+The index is committed either way, so a checkout that cannot find it has lost the
+authority for what the corpus contains, and that is a failure rather than a skip.
+
+## What the check is proved against
+
+The index in this repository declares no file today. A check judged only by it
+would refuse nothing, and its passing would say nothing at all.
+
+So each refusal is tripped deliberately against fixture indexes, in
+`crates/messstube-core/tests/corpus.rs`, and each one is paired with the near
+miss it may not refuse: a file that is present as well as named, a second entry
+that differs by its identifier as well as its file, a path with a directory in it
+rather than a `..`. The near miss is the half that catches a check which refuses
+everything, and a check that refuses everything passes its own test and blocks
+every corpus there will ever be.
+
+Those proofs run on every run of the corpus target, before it looks at the index
+at all, rather than when somebody remembers to run them.
