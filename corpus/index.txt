@@ -1,0 +1,17 @@
+# The corpus index.
+#
+# This file is the authority for what is in the corpus. Its format, the fields
+# an entry carries and the two directions it is checked in are specified in
+# docs/corpus.md, and the check that reads it is
+# crates/messstube-core/tests/corpus.rs.
+#
+# A line whose first character is # is a comment. A blank line ends an entry.
+# Every other line is a field, written as `name: value`.
+#
+# IT DECLARES NO FILE TODAY, AND THAT IS THE STATE OF THE PROJECT RATHER THAN A
+# PLACEHOLDER. No real instrument file has arrived: the first format is
+# docs/decisions/0013-first-format.md, the first reader is #48, and whether
+# files may be redistributed here at all is entry 2 of #1 and is open. So a
+# corpus test run reports nothing verified, and the checks in the target above
+# are proved against fixture indexes rather than against this file, because a
+# check judged only by an empty index would be a check nobody had run.
