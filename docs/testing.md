@@ -58,8 +58,9 @@ skipped test disappears into a pass. A run that could not touch the corpus must
 never be readable as one that did and found nothing, which is the same rule the
 hardware harness follows in `docs/decisions/0011-headless-testing.md`.
 
-The worked example is `crates/messstube-core/tests/corpus.rs`. It carries one
-case today and the corpus is not present, so a run prints one skip.
+The worked example is `crates/messstube-core/tests/corpus.rs`. What it reads is
+the corpus index, which is the authority for what the corpus holds; the index
+declares no file today, so a run verifies nothing and says so.
 
 ## The hardware harness, which is not one of the three
 
