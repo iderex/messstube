@@ -11,9 +11,12 @@
 //! and the option that turns a refusal into a partial result with its losses
 //! named.
 //!
-//! The reader interface and the compile-time registry are #32, and
-//! identification over a bounded prefix is #33. Their module layout is left to
-//! those issues rather than guessed at here.
+//! [`reader`] is the interface every reader implements and the registry that
+//! holds them, from #32. No reader is compiled in yet, so the registry there is
+//! empty; the first reader is #48.
+//!
+//! Identification over a bounded prefix is #33. Its module layout is left to
+//! that issue rather than guessed at here.
 //!
 //! The shape of this crate's public interface is constrained by
 //! `docs/decisions/0002-product-surface.md`: plain owned data rather than
@@ -29,6 +32,7 @@
 
 pub mod error;
 pub mod measurement;
+pub mod reader;
 pub mod unit;
 
 #[cfg(test)]
