@@ -14,11 +14,19 @@ name = "messstube-cli"
 version = "0.0.0"
 dependencies = [
  "messstube-core",
+ "messstube-tektronix-isf",
 ]
 
 [[package]]
 name = "messstube-core"
 version = "0.0.0"
+
+[[package]]
+name = "messstube-tektronix-isf"
+version = "0.0.0"
+dependencies = [
+ "messstube-core",
+]
 
 [[package]]
 name = "xtask"

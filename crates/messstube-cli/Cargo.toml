@@ -17,6 +17,13 @@ path = "src/main.rs"
 # deny.toml refuses a wildcard requirement and sets allow-wildcard-paths = false.
 messstube-core = { path = "../messstube-core", version = "0.0.0" }
 
+# The readers this build links. A reader crate depends on the core, so the core
+# cannot hold the list of them, and the tool is the crate that puts them
+# together. Adding a reader to this build is adding a line here and a line to
+# the registry in `src/main.rs`, and there is no other way in: the registry is
+# fixed at link time and nothing is loaded at run time.
+messstube-tektronix-isf = { path = "../readers/messstube-tektronix-isf", version = "0.0.0" }
+
 # The lint set is the workspace's, in the root Cargo.toml. A crate that wrote
 # its own would be a crate that differs from the others on a decision rather than
 # on a preference.
