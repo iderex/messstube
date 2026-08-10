@@ -287,7 +287,7 @@ fn record(cursor: &mut Cursor<'_>) -> Result<Record, ReadError> {
         at,
     };
 
-    let count = preamble.count("NR_PT", "NR_P")?;
+    let (count, _) = preamble.count("NR_PT", "NR_P")?;
     let width = preamble.width()?;
     let signed = preamble.signed()?;
     let order = preamble.order()?;
@@ -509,33 +509,55 @@ fn samples(
 /// splitting on `;` first works on all four files it was written from and
 /// would be wrong on a quoted field somebody typed a semicolon into, and
 /// handling it costs one boolean.
-fn items(text: &str) -> Vec<(String, String)> {
+fn items(text: &str) -> Vec<Item> {
     let mut found = Vec::new();
     let mut item = String::new();
+    let mut began = 0_usize;
     let mut quoted = false;
-    for glyph in text.chars() {
+    for (offset, glyph) in text.char_indices() {
         match glyph {
             '"' => {
                 quoted = !quoted;
                 item.push(glyph);
             }
             ';' if !quoted => {
-                push_item(&mut found, &item);
+                push_item(&mut found, &item, began);
                 item.clear();
+                began = offset.saturating_add(1);
             }
             _ => item.push(glyph),
         }
     }
-    push_item(&mut found, &item);
+    push_item(&mut found, &item, began);
     found
 }
 
+/// One item of a preamble, and where it sits in the record.
+///
+/// The offset is carried because a refusal about a field is only useful if it
+/// says which bytes to look at. A refusal located at the start of the record
+/// tells somebody with a hex editor to read the whole preamble again, which is
+/// the part `docs/decisions/0006-errors-and-partial-reads.md` says is most
+/// likely to be silently wrong.
+struct Item {
+    name: String,
+    value: String,
+    /// Where this item begins, counted from the start of the preamble.
+    at: usize,
+}
+
 /// One item, with the instrument path the first items carry stripped off it.
-fn push_item(into: &mut Vec<(String, String)>, item: &str) {
+fn push_item(into: &mut Vec<Item>, item: &str, began: usize) {
     let trimmed = item.trim();
     if trimmed.is_empty() {
         return;
     }
+    // The offset of the trimmed item rather than of the raw one, so that
+    // leading space between a `;` and a name does not move the answer.
+    let at = match item.find(trimmed) {
+        Some(inside) => began.saturating_add(inside),
+        None => began,
+    };
     // `:WFMPRE:NR_PT 10000` and `:WFMP:BYT_N 2` carry a leading path and the
     // items after them do not. Taking what follows the second colon leaves the
     // bare name in both cases, and a quoted value carrying a colon is untouched
@@ -545,75 +567,106 @@ fn push_item(into: &mut Vec<(String, String)>, item: &str) {
         .and_then(|rest| rest.split_once(':'))
         .map_or(trimmed, |(_path, rest)| rest);
     match named.split_once(' ') {
-        Some((name, value)) => into.push((name.trim().to_owned(), value.trim().to_owned())),
-        None => into.push((named.to_owned(), String::new())),
+        Some((name, value)) => into.push(Item {
+            name: name.trim().to_owned(),
+            value: value.trim().to_owned(),
+            at,
+        }),
+        None => into.push(Item {
+            name: named.to_owned(),
+            value: String::new(),
+            at,
+        }),
     }
 }
 
-/// What a preamble states for one field.
+/// What a preamble states for one field, and where it said it.
+///
+/// The offset travels with the value because every refusal about a field is
+/// located at the field rather than at the record. A refusal saying only that
+/// the record beginning at byte 0 has a wrong code format sends somebody back
+/// through the whole preamble looking for which field it meant.
 enum Stated<'value> {
     /// No item carries the name under either spelling.
     Absent,
-    /// One value, however many items stated it.
-    Agreed(&'value str),
-    /// Two items state the name and disagree.
-    Disagreeing(&'value str, &'value str),
+    /// One value, however many items stated it, and where the first of them is.
+    Agreed(&'value str, u64),
+    /// Two items state the name and disagree, and where the second one is.
+    Disagreeing(&'value str, &'value str, u64),
 }
 
 /// The items of one record's preamble, and where that record began.
 struct Preamble {
-    items: Vec<(String, String)>,
+    items: Vec<Item>,
     at: u64,
 }
 
 impl Preamble {
+    /// Where an item of this preamble sits in the file.
+    fn offset_of(&self, item: &Item) -> u64 {
+        self.at
+            .saturating_add(u64::try_from(item.at).unwrap_or(u64::MAX))
+    }
+
     /// What the preamble says under either spelling of a name.
     ///
     /// A field stated twice is normal here: the note records that `NR_PT`
     /// appears as the leading item and again in its ordinary position, with the
     /// same value both times. What a reader should do when the two disagree is
     /// under "What is not understood" in the note, so this reader refuses
-    /// rather than choosing one, and the refusal says both values.
+    /// rather than choosing one, and the refusal says both values and points at
+    /// the second of them.
     fn stated<'names>(&'names self, long: &str, short: &str) -> Stated<'names> {
-        let mut first: Option<&str> = None;
-        for (name, value) in &self.items {
-            if !name.eq_ignore_ascii_case(long) && !name.eq_ignore_ascii_case(short) {
+        let mut first: Option<(&str, u64)> = None;
+        for item in &self.items {
+            if !item.name.eq_ignore_ascii_case(long) && !item.name.eq_ignore_ascii_case(short) {
                 continue;
             }
             match first {
-                None => first = Some(value),
-                Some(seen) if seen == value => {}
-                Some(seen) => return Stated::Disagreeing(seen, value),
+                None => first = Some((item.value.as_str(), self.offset_of(item))),
+                Some((seen, _)) if seen == item.value => {}
+                Some((seen, _)) => {
+                    return Stated::Disagreeing(seen, &item.value, self.offset_of(item));
+                }
             }
         }
-        first.map_or(Stated::Absent, Stated::Agreed)
+        first.map_or(Stated::Absent, |(value, at)| Stated::Agreed(value, at))
     }
 
-    /// A field the read cannot go on without.
-    fn text(&self, long: &str, short: &str) -> Result<&str, ReadError> {
+    /// A field the read cannot go on without, and where the file states it.
+    ///
+    /// An absent field is located at the record rather than at a field, because
+    /// a field that is not there has no offset and pointing at one would be an
+    /// invention.
+    fn located(&self, long: &str, short: &str) -> Result<(&str, u64), ReadError> {
         match self.stated(long, short) {
-            Stated::Agreed(value) => Ok(value),
+            Stated::Agreed(value, at) => Ok((value, at)),
             Stated::Absent => Err(stopped(
                 self.at,
                 &format!("a {long} field in the preamble"),
                 "a preamble carrying none",
             )),
-            Stated::Disagreeing(one, other) => Err(stopped(
-                self.at,
+            Stated::Disagreeing(one, other, at) => Err(stopped(
+                at,
                 &format!("one value for {long} in the preamble"),
                 &format!("{one} and {other}"),
             )),
         }
     }
 
+    /// A field the read cannot go on without.
+    fn text(&self, long: &str, short: &str) -> Result<&str, ReadError> {
+        self.located(long, short).map(|(value, _)| value)
+    }
+
     /// A field the read can do without, refusing only where it is stated twice
     /// and disagrees with itself.
-    fn optional_text(&self, long: &str, short: &str) -> Result<Option<&str>, ReadError> {
+    fn optional_text(&self, long: &str, short: &str) -> Result<Option<(&str, u64)>, ReadError> {
         match self.stated(long, short) {
-            Stated::Agreed(value) => Ok(Some(value)),
+            Stated::Agreed(value, at) => Ok(Some((value, at))),
             Stated::Absent => Ok(None),
-            Stated::Disagreeing(one, other) => Err(stopped(
-                self.at,
+            Stated::Disagreeing(one, other, at) => Err(stopped(
+                at,
                 &format!("one value for {long} in the preamble"),
                 &format!("{one} and {other}"),
             )),
@@ -622,51 +675,48 @@ impl Preamble {
 
     /// A stated word, compared without regard to case because the format's own
     /// abbreviation rule is written that way.
-    fn word(&self, long: &str, short: &str) -> Result<String, ReadError> {
-        Ok(self.text(long, short)?.trim().to_ascii_uppercase())
+    fn word(&self, long: &str, short: &str) -> Result<(String, u64), ReadError> {
+        let (value, at) = self.located(long, short)?;
+        Ok((value.trim().to_ascii_uppercase(), at))
     }
 
     /// A stated count.
-    fn count(&self, long: &str, short: &str) -> Result<u64, ReadError> {
-        let stated = self.text(long, short)?;
-        decimal(stated.as_bytes()).ok_or_else(|| {
-            stopped(
-                self.at,
-                &format!("a whole number of samples in {long}"),
-                stated,
-            )
-        })
+    fn count(&self, long: &str, short: &str) -> Result<(u64, u64), ReadError> {
+        let (stated, at) = self.located(long, short)?;
+        let value = decimal(stated.as_bytes())
+            .ok_or_else(|| stopped(at, &format!("a whole number in {long}"), stated))?;
+        Ok((value, at))
     }
 
     /// A stated real number.
     fn number(&self, long: &str, short: &str) -> Result<f64, ReadError> {
-        let stated = self.text(long, short)?;
+        let (stated, at) = self.located(long, short)?;
         stated
             .parse::<f64>()
-            .map_err(|_| stopped(self.at, &format!("a number in {long}"), stated))
+            .map_err(|_| stopped(at, &format!("a number in {long}"), stated))
     }
 
     /// A real number the format may leave out.
     fn optional_number(&self, long: &str, short: &str) -> Result<Option<f64>, ReadError> {
         match self.optional_text(long, short)? {
             None => Ok(None),
-            Some(stated) => stated
+            Some((stated, at)) => stated
                 .parse::<f64>()
                 .map(Some)
-                .map_err(|_| stopped(self.at, &format!("a number in {long}"), stated)),
+                .map_err(|_| stopped(at, &format!("a number in {long}"), stated)),
         }
     }
 
     /// The width of a stored code, checked against the bit count the preamble
     /// states separately.
     fn width(&self) -> Result<Width, ReadError> {
-        let stated = self.count("BYT_NR", "BYT_N")?;
+        let (stated, at) = self.count("BYT_NR", "BYT_N")?;
         let width = match stated {
             1 => Width::One,
             2 => Width::Two,
             _ => {
                 return Err(stopped(
-                    self.at,
+                    at,
                     "a sample width of 1 or 2 bytes, which is the documented range",
                     &format!("{stated}"),
                 ));
@@ -674,11 +724,11 @@ impl Preamble {
         };
         // The two are documented to change together, so a file where they
         // disagree has said two different things about one quantity.
-        if let Some(bits) = self.optional_text("BIT_NR", "BIT_N")? {
+        if let Some((bits, bits_at)) = self.optional_text("BIT_NR", "BIT_N")? {
             let stated_bits = decimal(bits.as_bytes());
             if stated_bits != Some(width.bits()) {
                 return Err(stopped(
-                    self.at,
+                    bits_at,
                     &format!(
                         "{} bit(s) per code beside {} byte(s)",
                         width.bits(),
@@ -693,10 +743,11 @@ impl Preamble {
 
     /// Whether a code is signed.
     fn signed(&self) -> Result<bool, ReadError> {
-        match self.word("BN_FMT", "BN_F")?.as_str() {
+        let (stated, at) = self.word("BN_FMT", "BN_F")?;
+        match stated.as_str() {
             "RI" => Ok(true),
             "RP" => Ok(false),
-            other => Err(stopped(self.at, "RI or RP as the code format", other)),
+            other => Err(stopped(at, "RI or RP as the code format", other)),
         }
     }
 
@@ -709,21 +760,22 @@ impl Preamble {
     /// in none of those files, so the arm below is untested against any file an
     /// instrument wrote.
     fn order(&self) -> Result<ByteOrder, ReadError> {
-        match self.word("BYT_OR", "BYT_O")?.as_str() {
+        let (stated, at) = self.word("BYT_OR", "BYT_O")?;
+        match stated.as_str() {
             "MSB" => Ok(ByteOrder::Big),
             "LSB" => Ok(ByteOrder::Little),
-            other => Err(stopped(self.at, "MSB or LSB as the byte order", other)),
+            other => Err(stopped(at, "MSB or LSB as the byte order", other)),
         }
     }
 
     /// Refuse an encoding this reader has nothing to check itself against.
     fn encoding_is_binary(&self) -> Result<(), ReadError> {
-        let stated = self.word("ENCDG", "ENC")?;
+        let (stated, at) = self.word("ENCDG", "ENC")?;
         if stated == "BINARY" || stated == "BIN" {
             return Ok(());
         }
         Err(stopped(
-            self.at,
+            at,
             "a binary encoded block, which is what this reader implements",
             &stated,
         ))
@@ -731,16 +783,14 @@ impl Preamble {
 
     /// Refuse an envelope record rather than guess what its point count means.
     fn record_is_not_an_envelope(&self) -> Result<(), ReadError> {
-        let stated = self.word("PT_FMT", "PT_F")?;
+        let (stated, at) = self.word("PT_FMT", "PT_F")?;
         if stated == "Y" {
             return Ok(());
         }
         Err(stopped(
-            self.at,
+            at,
             "a Y record, the only point format this reader reads",
-            &format!(
-                "{stated}, whose point count is under \"What is not understood\" in the format note"
-            ),
+            &format!("{stated}, whose point count the format note does not resolve"),
         ))
     }
 
@@ -776,7 +826,8 @@ impl Preamble {
             "{count} point(s), an increment of {}, a zero of {}, a point offset of {} and a horizontal unit of {}",
             self.text("XINCR", "XIN")?,
             self.text("XZERO", "XZE")?,
-            self.optional_text("PT_OFF", "PT_O")?.unwrap_or("none"),
+            self.optional_text("PT_OFF", "PT_O")?
+                .map_or("none", |(stated, _)| stated),
             stated_unit
         );
 
@@ -810,7 +861,7 @@ impl Preamble {
             // rather than named after its position in the file.
             name: self
                 .optional_text("WFID", "WFI")?
-                .map(|stated| source_of(unquoted(stated)))
+                .map(|(stated, _)| source_of(unquoted(stated)))
                 .unwrap_or_default(),
             unit: unit_of(unquoted(stated_unit)),
             samples,
