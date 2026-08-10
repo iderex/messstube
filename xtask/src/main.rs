@@ -329,6 +329,37 @@ const LEGS: &[Leg] = &[
         judge: None,
     },
     Leg {
+        // The greppable invariants over reader code, from #23. Beside the lints
+        // rather than inside the test leg, because it judges source text and a
+        // reader that went around the bounded helpers or reached for the clock
+        // should be told so before a suite runs, not in the middle of one.
+        //
+        // IT IS ITS OWN LEG SO THAT IT IS ITS OWN CHECK. #23 asks for the
+        // invariant lint to appear on a pull request under a fixed name, and a
+        // name is what this leg gives it: `.github/workflows/gate.yml` runs this
+        // leg in a job of its own. Left inside `test` it would be a line in a log
+        // of a check named for something else, which is what a reviewer opens a
+        // log to avoid.
+        //
+        // The target also runs again under `test`, which is not waste worth
+        // removing: `cargo test --workspace` is the command a contributor types,
+        // and a check that only runs when it is asked for by name is a check a
+        // contributor does not run.
+        name: "invariants",
+        program: "cargo",
+        args: &[
+            "test",
+            "--locked",
+            "--package",
+            "messstube-core",
+            "--test",
+            "reader_invariants",
+        ],
+        means: "reader code went around the bounded helpers, or reached for something the caller did not hand it",
+        install: None,
+        judge: None,
+    },
+    Leg {
         name: "build",
         program: "cargo",
         args: &["build", "--locked", "--workspace", "--all-targets"],
@@ -732,14 +763,21 @@ mod tests {
     }
 
     #[test]
-    fn the_legs_run_format_lint_build_test_coverage_floor_then_deps() {
+    fn the_legs_run_format_lint_invariants_build_test_coverage_floor_then_deps() {
         // The order is the interface. A change to it is a change to which
         // failure a contributor is shown first, and it should have to break
         // this line to happen.
         assert_eq!(
             LEGS.iter().map(|leg| leg.name).collect::<Vec<_>>(),
             [
-                "format", "lint", "build", "test", "coverage", "floor", "deps"
+                "format",
+                "lint",
+                "invariants",
+                "build",
+                "test",
+                "coverage",
+                "floor",
+                "deps"
             ]
         );
     }
@@ -750,7 +788,14 @@ mod tests {
         assert_eq!(
             names(&selected),
             [
-                "format", "lint", "build", "test", "coverage", "floor", "deps"
+                "format",
+                "lint",
+                "invariants",
+                "build",
+                "test",
+                "coverage",
+                "floor",
+                "deps"
             ]
         );
     }
@@ -787,14 +832,14 @@ mod tests {
             Outcome {
                 passed: vec!["format"],
                 failed: Some("lint"),
-                not_reached: vec!["build", "test", "coverage", "floor", "deps"],
+                not_reached: vec!["invariants", "build", "test", "coverage", "floor", "deps"],
                 not_selected: Vec::new(),
             }
         );
         let report = outcome.report();
         assert!(
             report.contains(
-                "NOT EXAMINED: build, test, coverage, floor, deps (the run stopped before them)"
+                "NOT EXAMINED: invariants, build, test, coverage, floor, deps (the run stopped before them)"
             ),
             "{report}"
         );
@@ -809,13 +854,20 @@ mod tests {
         assert_eq!(
             outcome.passed,
             [
-                "format", "lint", "build", "test", "coverage", "floor", "deps"
+                "format",
+                "lint",
+                "invariants",
+                "build",
+                "test",
+                "coverage",
+                "floor",
+                "deps"
             ]
         );
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         assert_eq!(outcome.not_selected, Vec::<&str>::new());
         let report = outcome.report();
-        assert!(report.contains("7 of 7 leg(s) passed"), "{report}");
+        assert!(report.contains("8 of 8 leg(s) passed"), "{report}");
         assert!(!report.contains("NOT EXAMINED"), "{report}");
     }
 
@@ -842,12 +894,20 @@ mod tests {
 
         assert_eq!(
             outcome.not_selected,
-            ["format", "lint", "test", "coverage", "floor", "deps"]
+            [
+                "format",
+                "lint",
+                "invariants",
+                "test",
+                "coverage",
+                "floor",
+                "deps"
+            ]
         );
         let report = outcome.report();
         assert!(
             report.contains(
-                "NOT EXAMINED: format, lint, test, coverage, floor, deps (not asked for on this run)"
+                "NOT EXAMINED: format, lint, invariants, test, coverage, floor, deps (not asked for on this run)"
             ),
             "{report}"
         );
@@ -870,7 +930,9 @@ mod tests {
             "{report}"
         );
         assert!(
-            report.contains("format, build, coverage, floor, deps (not asked for on this run)"),
+            report.contains(
+                "format, invariants, build, coverage, floor, deps (not asked for on this run)"
+            ),
             "{report}"
         );
     }
@@ -884,7 +946,7 @@ mod tests {
 
         assert_eq!(outcome.total(), LEGS.len());
         let report = outcome.report();
-        assert!(report.contains("1 of 7 leg(s) passed"), "{report}");
+        assert!(report.contains("1 of 8 leg(s) passed"), "{report}");
     }
 
     /// An LCOV report, built the way the tool writes one: a record per file,
