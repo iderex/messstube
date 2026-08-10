@@ -57,6 +57,16 @@ struct Leg {
     /// would mean the instruction and the leg drift apart, and the reader who
     /// most needs it is the one who did not read the document.
     install: Option<&'static str>,
+    /// What to make of what the command left behind, for a leg whose exit code
+    /// is not the whole verdict. `None` where it is.
+    ///
+    /// A coverage run exits zero whether the number it measured is acceptable
+    /// or not, and it exits zero when it measured nothing at all. So the
+    /// judgement is a second step here rather than a `grep` in a workflow file,
+    /// which would be a second gate. It runs only after the command succeeded,
+    /// because judging the leavings of a command that failed is judging
+    /// whatever was there before it.
+    judge: Option<fn() -> Result<String, String>>,
 }
 
 /// The oldest toolchain the workspace must still compile on, spelled once.
@@ -78,6 +88,205 @@ macro_rules! floor_version {
 }
 
 const FLOOR: &str = floor_version!();
+
+/// Where the coverage leg writes its report and where the judgement reads it.
+///
+/// Inside `target/` so that nothing untracked lands beside the source, and at
+/// the top of it rather than in a directory of its own because the report is
+/// written before anything has made a directory to put it in.
+const COVERAGE_REPORT: &str = "target/coverage-lcov.info";
+
+/// The line coverage the parsing surface may not fall below, in tenths of a
+/// percent.
+///
+/// SET FROM A MEASUREMENT AND NOT FROM THE AIR. The surface was measured once
+/// the first reader existed, on `250f00a`, and the bar was put just below what
+/// that reader and the bounded helpers actually reach:
+///
+///     cargo llvm-cov --locked --workspace --lcov --output-path target/coverage-lcov.info
+///     crates/messstube-core/src/bounded.rs                 320 of 372 line(s), 86.0%
+///     crates/readers/messstube-tektronix-isf/src/lib.rs    553 of 697 line(s), 79.3%
+///     the parsing surface                                  873 of 1069 line(s), 81.6%
+///
+/// A number chosen in advance is either out of reach and gets lowered until it
+/// means nothing, or trivial from the day it lands. This one is neither: it is
+/// 1.6 points under the measurement, which is the margin for a reader whose
+/// tests move slightly rather than room for a reader nobody tested.
+///
+/// Tenths of a percent as a whole number rather than a fraction, so that the
+/// comparison below is integer arithmetic. A bar decided by a floating point
+/// comparison is a bar that can be missed by an ulp.
+const COVERAGE_FLOOR_TENTHS: u64 = 800;
+
+/// A file the coverage report counted, and how much of it ran.
+#[derive(Debug, PartialEq, Eq)]
+struct Counted {
+    /// The path, with separators written the one way so that a report produced
+    /// on Windows and one produced on Linux are read the same.
+    path: String,
+    /// Lines that could have run.
+    found: u64,
+    /// Lines that did.
+    hit: u64,
+}
+
+impl Counted {
+    /// Whether this file is part of the surface the bar is enforced on.
+    ///
+    /// THE PARSING CODE, AND NOTHING ELSE. Every reader crate, and the
+    /// bounded-read helpers in the core that every reader parses through. That
+    /// is where a line nobody exercised is a reachable bug in somebody's file
+    /// rather than an untested convenience, and it is the surface #28 places
+    /// the bar on.
+    fn is_parsing_surface(&self) -> bool {
+        self.path.contains("/crates/readers/")
+            || self.path.ends_with("/crates/messstube-core/src/bounded.rs")
+    }
+}
+
+/// The per-file line counts in an LCOV report.
+///
+/// LCOV rather than the tool's own summary, and rather than its JSON. The
+/// summary is a table laid out for a person and its columns move; the JSON
+/// would need a parser this workspace has no dependency for. LCOV is three
+/// line-oriented records this function reads in twenty lines, which is what
+/// keeps the coverage leg from being the first thing in the tree to pull a
+/// dependency in.
+fn counted_files(report: &str) -> Vec<Counted> {
+    let mut files = Vec::new();
+    let mut path: Option<String> = None;
+    let mut found = 0_u64;
+    let mut hit = 0_u64;
+    for line in report.lines() {
+        if let Some(named) = line.strip_prefix("SF:") {
+            path = Some(named.trim().replace('\\', "/"));
+            found = 0;
+            hit = 0;
+        } else if let Some(count) = line.strip_prefix("LF:") {
+            found = count.trim().parse::<u64>().unwrap_or(0);
+        } else if let Some(count) = line.strip_prefix("LH:") {
+            hit = count.trim().parse::<u64>().unwrap_or(0);
+        } else if line.trim() == "end_of_record" {
+            if let Some(named) = path.take() {
+                files.push(Counted {
+                    path: named,
+                    found,
+                    hit,
+                });
+            }
+        }
+    }
+    files
+}
+
+/// A coverage percentage in tenths of a percent, without floating point.
+fn tenths(hit: u64, found: u64) -> u64 {
+    if found == 0 {
+        return 0;
+    }
+    hit.saturating_mul(1000).saturating_div(found)
+}
+
+/// A percentage written the way somebody reads one.
+fn percent(hit: u64, found: u64) -> String {
+    let scaled = tenths(hit, found);
+    format!(
+        "{}.{}%",
+        scaled.saturating_div(10),
+        scaled.checked_rem(10).unwrap_or(0)
+    )
+}
+
+/// What the coverage report says, or why it cannot be believed.
+///
+/// FAIL CLOSED, IN THREE DIRECTIONS. A report that cannot be read, a report
+/// that names no file, and a report naming files but none of the enforced
+/// surface are all refusals rather than passes. The last is the one these
+/// gates actually rot through: a path that stopped matching, or a crate that
+/// moved, leaves a step that measures an empty set, computes a hundred per
+/// cent of nothing, and reports a green verdict about code it never looked at.
+fn judge_report(report: &str) -> Result<String, String> {
+    let files = counted_files(report);
+    if files.is_empty() {
+        return Err(format!(
+            "{COVERAGE_REPORT} names no source file, so nothing was measured. A coverage step that passes on an empty report is worse than no coverage step."
+        ));
+    }
+
+    let surface: Vec<&Counted> = files
+        .iter()
+        .filter(|file| file.is_parsing_surface())
+        .collect();
+    if surface.is_empty() {
+        return Err(format!(
+            "{COVERAGE_REPORT} counts {} file(s) and none of them is a reader crate or the bounded-read helpers. The bar is enforced on nothing, which is a passing verdict about code nobody measured.",
+            files.len()
+        ));
+    }
+
+    let found: u64 = surface.iter().map(|file| file.found).sum();
+    let hit: u64 = surface.iter().map(|file| file.hit).sum();
+    if found == 0 {
+        return Err(format!(
+            "{COVERAGE_REPORT} counts {} file(s) of the parsing surface and no lines in them.",
+            surface.len()
+        ));
+    }
+
+    let whole_found: u64 = files.iter().map(|file| file.found).sum();
+    let whole_hit: u64 = files.iter().map(|file| file.hit).sum();
+
+    let mut said = String::new();
+    for file in &surface {
+        let _ = writeln!(
+            said,
+            "coverage:   {} {} of {} line(s), {}",
+            file.path,
+            file.hit,
+            file.found,
+            percent(file.hit, file.found)
+        );
+    }
+    let _ = writeln!(
+        said,
+        "coverage: the parsing surface is {} of {} line(s), against a bar of {}",
+        percent(hit, found),
+        found,
+        percent(COVERAGE_FLOOR_TENTHS, 1000)
+    );
+    // Reported and never gated on. A project-wide number is a thing to watch
+    // move; it is not a thing to refuse a change over, for the reason the bar
+    // is not placed here in the first place.
+    let _ = write!(
+        said,
+        "coverage: the whole project is {} of {} line(s), reported and not gated on",
+        percent(whole_hit, whole_found),
+        whole_found
+    );
+
+    if tenths(hit, found) < COVERAGE_FLOOR_TENTHS {
+        return Err(format!(
+            "{said}\ncoverage: the parsing surface is under the bar. Coverage says which lines ran and nothing more: it is a floor under the suite and it is not evidence that a reader produces correct values."
+        ));
+    }
+    Ok(said)
+}
+
+/// The judgement the coverage leg is not finished without.
+fn judge_coverage() -> Result<String, String> {
+    judge_coverage_at(COVERAGE_REPORT)
+}
+
+/// The same judgement over a named report, so that the unreadable case is a
+/// thing a test can reach rather than a branch taken on trust.
+fn judge_coverage_at(path: &str) -> Result<String, String> {
+    let report = std::fs::read_to_string(path).map_err(|failure| {
+        format!(
+            "{path} could not be read: {failure}. A step that cannot read its own report has measured nothing, and reporting that as a pass is the ordinary way a coverage gate rots."
+        )
+    })?;
+    judge_report(&report)
+}
 
 /// The legs, in the order they run. The order is cheapest-and-most-local first:
 /// a formatting difference is decided by reading the file, a lint by reading a
@@ -101,6 +310,7 @@ const LEGS: &[Leg] = &[
         args: &["fmt", "--all", "--check"],
         means: "a file is not formatted the way the configuration in the tree says",
         install: None,
+        judge: None,
     },
     Leg {
         name: "lint",
@@ -116,6 +326,7 @@ const LEGS: &[Leg] = &[
         ],
         means: "a lint fired, and warnings are errors here",
         install: None,
+        judge: None,
     },
     Leg {
         name: "build",
@@ -123,6 +334,7 @@ const LEGS: &[Leg] = &[
         args: &["build", "--locked", "--workspace", "--all-targets"],
         means: "the workspace does not compile",
         install: None,
+        judge: None,
     },
     Leg {
         name: "test",
@@ -130,6 +342,39 @@ const LEGS: &[Leg] = &[
         args: &["test", "--locked", "--workspace"],
         means: "a test failed, or a test target could not be built",
         install: None,
+        judge: None,
+    },
+    Leg {
+        // The coverage bar, from #28. It runs the suite a second time under
+        // instrumentation, which is why it is after `test`: a suite that does
+        // not pass is a coverage number about a broken tree, and the failure a
+        // contributor should be shown first is the failing test.
+        //
+        // IT GATES ON THE PARSING SURFACE AND REPORTS THE REST. A bar over a
+        // project-wide percentage lets a thin module drag the number under
+        // while the code that decides security outcomes stays untested, and it
+        // rewards testing whatever is easiest. What the surface is, and why the
+        // whole-project number is printed and not gated, is in
+        // `judge_coverage`.
+        //
+        // The report is written where the workflow can retain it whether this
+        // leg passed or failed, because the report is exactly what somebody
+        // needs in order to see why it failed.
+        name: "coverage",
+        program: "cargo",
+        args: &[
+            "llvm-cov",
+            "--locked",
+            "--workspace",
+            "--lcov",
+            "--output-path",
+            COVERAGE_REPORT,
+        ],
+        means: "the parsing surface is less covered than the bar, or the coverage report could not be read",
+        install: Some(
+            "rustup component add llvm-tools-preview && cargo install --locked cargo-llvm-cov",
+        ),
+        judge: Some(judge_coverage),
     },
     Leg {
         // The floor build, from #25. It compiles the workspace with the oldest
@@ -185,6 +430,7 @@ const LEGS: &[Leg] = &[
         ],
         means: "the workspace does not compile on the oldest toolchain it declares support for",
         install: Some(concat!("rustup toolchain install ", floor_version!())),
+        judge: None,
     },
     Leg {
         // Last, and it is the only leg whose verdict can change while the tree
@@ -202,6 +448,7 @@ const LEGS: &[Leg] = &[
         args: &["deny", "--locked", "check"],
         means: "the resolved dependency graph breaks the policy in deny.toml, or a crate in it has a published advisory",
         install: Some("cargo install --locked cargo-deny"),
+        judge: None,
     },
 ];
 
@@ -401,7 +648,7 @@ fn main() -> ExitCode {
 
     let outcome = run_legs(&selected, LEGS, |leg| {
         println!("gate: {} leg: {}", leg.name, spell(leg));
-        match Command::new(leg.program).args(leg.args).status() {
+        let ran = match Command::new(leg.program).args(leg.args).status() {
             Ok(status) => status.success(),
             Err(error) => {
                 // The leg could not be started at all, which is a different
@@ -410,6 +657,25 @@ fn main() -> ExitCode {
                 eprintln!("gate: could not run `{}`: {error}", spell(leg));
                 false
             }
+        };
+        if !ran {
+            return false;
+        }
+        // The second half of a leg whose exit code is not the whole verdict.
+        // Only reached when the command itself succeeded, so what it judges is
+        // this run's leavings and not the last one's.
+        match leg.judge {
+            None => true,
+            Some(judge) => match judge() {
+                Ok(said) => {
+                    println!("{said}");
+                    true
+                }
+                Err(why) => {
+                    eprintln!("{why}");
+                    false
+                }
+            },
         }
     });
 
@@ -452,7 +718,10 @@ mod tests {
     // say which precondition that was.
     #![allow(clippy::expect_used)]
 
-    use super::{FLOOR, LEGS, Leg, Outcome, run_legs, select, spell};
+    use super::{
+        FLOOR, LEGS, Leg, Outcome, judge_coverage_at, judge_report, run_legs, select, spell,
+    };
+    use std::fmt::Write as _;
 
     fn names(legs: &[&Leg]) -> Vec<&'static str> {
         legs.iter().map(|leg| leg.name).collect()
@@ -463,13 +732,15 @@ mod tests {
     }
 
     #[test]
-    fn the_legs_run_format_then_lint_then_build_then_test_then_floor_then_deps() {
+    fn the_legs_run_format_lint_build_test_coverage_floor_then_deps() {
         // The order is the interface. A change to it is a change to which
         // failure a contributor is shown first, and it should have to break
         // this line to happen.
         assert_eq!(
             LEGS.iter().map(|leg| leg.name).collect::<Vec<_>>(),
-            ["format", "lint", "build", "test", "floor", "deps"]
+            [
+                "format", "lint", "build", "test", "coverage", "floor", "deps"
+            ]
         );
     }
 
@@ -478,7 +749,9 @@ mod tests {
         let selected = select(&[], LEGS).expect("no arguments is a valid request");
         assert_eq!(
             names(&selected),
-            ["format", "lint", "build", "test", "floor", "deps"]
+            [
+                "format", "lint", "build", "test", "coverage", "floor", "deps"
+            ]
         );
     }
 
@@ -514,13 +787,15 @@ mod tests {
             Outcome {
                 passed: vec!["format"],
                 failed: Some("lint"),
-                not_reached: vec!["build", "test", "floor", "deps"],
+                not_reached: vec!["build", "test", "coverage", "floor", "deps"],
                 not_selected: Vec::new(),
             }
         );
         let report = outcome.report();
         assert!(
-            report.contains("NOT EXAMINED: build, test, floor, deps (the run stopped before them)"),
+            report.contains(
+                "NOT EXAMINED: build, test, coverage, floor, deps (the run stopped before them)"
+            ),
             "{report}"
         );
     }
@@ -533,12 +808,14 @@ mod tests {
         assert_eq!(outcome.failed, None);
         assert_eq!(
             outcome.passed,
-            ["format", "lint", "build", "test", "floor", "deps"]
+            [
+                "format", "lint", "build", "test", "coverage", "floor", "deps"
+            ]
         );
         assert_eq!(outcome.not_reached, Vec::<&str>::new());
         assert_eq!(outcome.not_selected, Vec::<&str>::new());
         let report = outcome.report();
-        assert!(report.contains("6 of 6 leg(s) passed"), "{report}");
+        assert!(report.contains("7 of 7 leg(s) passed"), "{report}");
         assert!(!report.contains("NOT EXAMINED"), "{report}");
     }
 
@@ -565,12 +842,12 @@ mod tests {
 
         assert_eq!(
             outcome.not_selected,
-            ["format", "lint", "test", "floor", "deps"]
+            ["format", "lint", "test", "coverage", "floor", "deps"]
         );
         let report = outcome.report();
         assert!(
             report.contains(
-                "NOT EXAMINED: format, lint, test, floor, deps (not asked for on this run)"
+                "NOT EXAMINED: format, lint, test, coverage, floor, deps (not asked for on this run)"
             ),
             "{report}"
         );
@@ -593,7 +870,7 @@ mod tests {
             "{report}"
         );
         assert!(
-            report.contains("format, build, floor, deps (not asked for on this run)"),
+            report.contains("format, build, coverage, floor, deps (not asked for on this run)"),
             "{report}"
         );
     }
@@ -607,7 +884,135 @@ mod tests {
 
         assert_eq!(outcome.total(), LEGS.len());
         let report = outcome.report();
-        assert!(report.contains("1 of 6 leg(s) passed"), "{report}");
+        assert!(report.contains("1 of 7 leg(s) passed"), "{report}");
+    }
+
+    /// An LCOV report, built the way the tool writes one: a record per file,
+    /// with the line counts and a terminator.
+    ///
+    /// A helper rather than seven literals, because what these proofs are about
+    /// is the numbers rather than the bytes, and a fixture rule written for
+    /// hostile input does not reach a report this repository's own tool
+    /// produced. The one thing kept exact is the shape of a record.
+    fn lcov(files: &[(&str, u64, u64)]) -> String {
+        let mut written = String::new();
+        for (path, found, hit) in files {
+            let _ = writeln!(written, "SF:{path}");
+            let _ = writeln!(written, "LF:{found}");
+            let _ = writeln!(written, "LH:{hit}");
+            let _ = writeln!(written, "end_of_record");
+        }
+        written
+    }
+
+    /// A path as the report carries one on this machine, which is absolute and
+    /// uses the separator this platform uses.
+    const A_READER: &str = r"C:\work\messstube\crates\readers\messstube-tektronix-isf\src\lib.rs";
+    const THE_HELPERS: &str = "/home/runner/work/messstube/crates/messstube-core/src/bounded.rs";
+    const SOMETHING_ELSE: &str = "/home/runner/work/messstube/crates/messstube-cli/src/main.rs";
+
+    #[test]
+    fn a_report_that_cannot_be_read_is_a_failure_and_not_a_pass() {
+        // The ordinary way one of these gates rots. A step that measured
+        // nothing and said so quietly is indistinguishable afterwards from a
+        // step that measured everything and found it clean.
+        let judged = judge_coverage_at("target/there-is-no-report-by-this-name.info");
+        let why = judged.expect_err("a report that is not there cannot be believed");
+        assert!(why.contains("could not be read"), "{why}");
+        assert!(why.contains("measured nothing"), "{why}");
+    }
+
+    #[test]
+    fn an_empty_report_is_a_failure_and_not_a_hundred_per_cent() {
+        for report in ["", "\n\n", "TN:\nend_of_record\n"] {
+            let why = judge_report(report).expect_err("an empty report measured nothing");
+            assert!(why.contains("names no source file"), "{why}");
+        }
+    }
+
+    #[test]
+    fn a_report_naming_no_file_of_the_enforced_surface_is_a_failure() {
+        // The failure that looks most like a pass: the report is real, the
+        // numbers are real, and the paths the bar is enforced on are not in it
+        // because one of them moved. A hundred per cent of nothing is not a
+        // verdict about the parsing code.
+        let report = lcov(&[(SOMETHING_ELSE, 100, 100)]);
+        let why = judge_report(&report).expect_err("the enforced surface is absent");
+        assert!(why.contains("none of them is a reader crate"), "{why}");
+        assert!(why.contains("nobody measured"), "{why}");
+    }
+
+    #[test]
+    fn the_bar_refuses_a_surface_under_it_and_admits_one_on_it() {
+        // The bar and its near miss, one line apart. A bar that refuses
+        // everything passes a test that only checks that it refused, and then
+        // refuses every change anybody makes.
+        let under = lcov(&[(A_READER, 1000, 799), (THE_HELPERS, 0, 0)]);
+        let why = judge_report(&under).expect_err("79.9% is under a bar of 80.0%");
+        assert!(why.contains("under the bar"), "{why}");
+        assert!(why.contains("79.9%"), "{why}");
+        // And the sentence says what coverage is not, at the moment somebody is
+        // most likely to reach for it as evidence of correctness.
+        assert!(
+            why.contains("not evidence that a reader produces correct values"),
+            "{why}"
+        );
+
+        let on = lcov(&[(A_READER, 1000, 800), (THE_HELPERS, 0, 0)]);
+        let said = judge_report(&on).expect("80.0% is not under a bar of 80.0%");
+        assert!(said.contains("80.0%"), "{said}");
+    }
+
+    #[test]
+    fn the_bar_is_over_the_surface_and_the_whole_project_is_only_reported() {
+        // The reason the bar is not project-wide. Here the parsing surface is
+        // comfortably above it and everything else is untested, and the run
+        // passes while saying so: a bar over the total would refuse this, and a
+        // bar over the total is also what lets an untested reader hide behind a
+        // well tested tool.
+        let report = lcov(&[
+            (A_READER, 100, 95),
+            (THE_HELPERS, 100, 90),
+            (SOMETHING_ELSE, 800, 0),
+        ]);
+        let said = judge_report(&report).expect("the surface is above the bar");
+        assert!(
+            said.contains("the parsing surface is 92.5% of 200 line(s)"),
+            "{said}"
+        );
+        assert!(
+            said.contains("the whole project is 18.5% of 1000 line(s), reported and not gated on"),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn a_report_is_read_the_same_whichever_platform_wrote_it() {
+        // The reader path in this fixture is written with the separator Windows
+        // uses and the helpers path with the one Linux uses. A judgement that
+        // read only one of them would enforce the bar on half the surface on
+        // one platform and say nothing about it.
+        let report = lcov(&[(A_READER, 10, 9), (THE_HELPERS, 10, 9)]);
+        let said = judge_report(&report).expect("both files are the enforced surface");
+        assert!(said.contains("of 20 line(s)"), "{said}");
+        assert!(said.contains("crates/readers/"), "{said}");
+        assert!(
+            said.contains("crates/messstube-core/src/bounded.rs"),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn the_leg_that_measures_coverage_is_the_only_one_that_judges_its_leavings() {
+        // The extension is narrow on purpose. A leg whose exit code is the
+        // whole verdict must not grow a second opinion here, because then two
+        // places decide what a leg means.
+        let judging: Vec<&str> = LEGS
+            .iter()
+            .filter(|leg| leg.judge.is_some())
+            .map(|leg| leg.name)
+            .collect();
+        assert_eq!(judging, ["coverage"]);
     }
 
     #[test]

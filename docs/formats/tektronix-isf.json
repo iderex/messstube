@@ -1,0 +1,237 @@
+{
+  "format": "Tektronix ISF",
+  "note": "docs/formats/tektronix-isf.md",
+  "written": "2026-08-09",
+  "raised-in": "#47",
+  "what-this-is": "The machine-readable description of the format that docs/decisions/0003-hand-written-readers.md requires beside every reader. It is documentation of the format and not of any code in this repository, and it is written so that somebody implementing a reader in another language need not open this repository's source.",
+  "nothing-checks-agreement": "No route in this tree compares this description against the note beside it or against a reader. docs/decisions/0003-hand-written-readers.md names that drift as the cost of hand-written readers and owes the check to milestone 5. There is no reader for this format yet, so this description has been checked against four files by hand and against no implementation.",
+  "source-words": {
+    "documented": "A Tektronix document listed under evidence says it.",
+    "observed": "True of the files listed under evidence, with the count of files given. A statement about four files and not about the format.",
+    "inferred": "Neither of the above. The reasoning it rests on is given in the note."
+  },
+  "evidence": {
+    "files": [
+      {
+        "url": "https://raw.githubusercontent.com/everedero/isf2csv/master/example.isf",
+        "bytes": 20463,
+        "sha256": "17e05ed3c799c8ee110c07e6a385abe68d7068e7ee3963cda1a99fbe0e42ff6c",
+        "records": 1,
+        "fetched": "2026-08-09"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/gpasquev/isfread-py/master/sample/sample_ENV.isf",
+        "bytes": 2000346,
+        "sha256": "9454bbf1826cb24cfe51feef834095e859b906ace75bfbac1d66f469cc2c1aaf",
+        "records": 1,
+        "fetched": "2026-08-09"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/gpasquev/isfread-py/master/sample/sample_Y.isf",
+        "bytes": 2000344,
+        "sha256": "bc6373e080cbff445e3339f10418b3a64e8223fd4ae1b5b398056372143ec535",
+        "records": 1,
+        "fetched": "2026-08-09"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/justengel/isfreader/master/tests/T0000CH1.ISF",
+        "bytes": 2500787,
+        "sha256": "56a8e38db10b0c4992722ad736ac29a3afe72ca64a3b100c02cd310ba7bc36f9",
+        "records": 2,
+        "fetched": "2026-08-09"
+      }
+    ],
+    "files-are-not-in-this-repository": "None of the four is in this repository and none is in the corpus. Whether real instrument files may be redistributed here is entry 2 of #1 and is open. They are named by address and digest so the counts here can be reproduced.",
+    "documents": [
+      {
+        "title": "What is the format of an ISF file?",
+        "publisher": "Tektronix",
+        "url": "https://www.tek.com/en/support/faqs/what-format-isf-file",
+        "read": "2026-08-09",
+        "covers": "the record framing and the sample count worked from BYT_NR"
+      },
+      {
+        "title": "TBS2000 Series Digital Oscilloscopes Programmer Manual, 077-1149-02",
+        "publisher": "Tektronix",
+        "url": "https://download.tek.com/manual/TBS2000-Programmer-077114902.pdf",
+        "read": "2026-08-09",
+        "covers": "every field marked documented below",
+        "limit": "A manual for a different instrument family from the ones that wrote these files. No file observed records its model, so a documented statement here is about the Tektronix waveform preamble vocabulary and not about the instrument that produced any particular file."
+      }
+    ],
+    "not-used": "No copyleft implementation of this format was read and none is a source for anything here; entry 4 of #1 is open and this description is written so that it need not be answered for this format. One file was fetched from the GPL-3.0 repository everedero/isf2csv, which is the source of a file and of no statement. The permissively licensed scottprahl/RigolWFM and justengel/isfreader were also not used, so that the independent expected values in #49 stay independent of this description."
+  },
+  "recognition": {
+    "offset": 0,
+    "bytes": ":WFMP",
+    "source": "observed in 4 of 4 files",
+    "why-five-bytes": "The first keyword is spelled :WFMPRE: in one file and :WFMP: in three. Five bytes is the longest prefix both carry. Inferred, resting on the SCPI abbreviation rule, that any accepted abbreviation of WFMPRE begins WFMP.",
+    "extensions": ["isf"],
+    "extension-is-a-hint": "docs/decisions/0005-identification.md decides on bytes; an extension orders an answer and never decides one."
+  },
+  "file": {
+    "structure": "One or more records laid end to end.",
+    "separator-between-records": null,
+    "terminator": null,
+    "record-count-field": null,
+    "how-many-records": "Discovered by walking the file until the bytes run out.",
+    "source": "observed: one of four files holds two records, the rest hold one"
+  },
+  "record": {
+    "preamble": {
+      "encoding": "ascii",
+      "observed-byte-range": "0x20 to 0x7e inclusive, in all five preambles, with no CR, LF or NUL",
+      "item-separator": ";",
+      "item-shape": "name, one space, value",
+      "leading-path": "The first and second items carry a leading :WFMPRE: or :WFMP: path; the rest carry the bare name.",
+      "quoting": "\"",
+      "quoted-values-observed": ["WFID", "XUNIT", "YUNIT"],
+      "first-field-stated-twice": "NR_PT appears as the leading item and again in its ordinary position, with the same value in all five records observed.",
+      "longest-observed-bytes": 449,
+      "spelling": "Long and short keyword spellings both occur. Observed consistent inside a file: one file long throughout, three short throughout."
+    },
+    "block": {
+      "marker": [":CURVE", ":CURV"],
+      "marker-observed": {":CURVE": 1, ":CURV": 3},
+      "after-marker": " #",
+      "length-digit-count": "one ASCII digit giving how many digits follow",
+      "length": "that many ASCII digits, giving the block length in bytes",
+      "then": "exactly that many bytes of sample codes",
+      "source": "documented, Tektronix ISF FAQ, and observed in all five records",
+      "observed": [
+        {"file": "example.isf", "record": 1, "preamble-bytes": 449, "marker": ":CURVE", "length-digits": 5, "block-bytes": 20000, "block-begins-at": 463},
+        {"file": "sample_ENV.isf", "record": 1, "preamble-bytes": 331, "marker": ":CURV", "length-digits": 7, "block-bytes": 2000000, "block-begins-at": 346},
+        {"file": "sample_Y.isf", "record": 1, "preamble-bytes": 329, "marker": ":CURV", "length-digits": 7, "block-bytes": 2000000, "block-begins-at": 344},
+        {"file": "T0000CH1.ISF", "record": 1, "preamble-bytes": 377, "marker": ":CURV", "length-digits": 7, "block-bytes": 1250000, "block-begins-at": 392},
+        {"file": "T0000CH1.ISF", "record": 2, "preamble-bytes": 380, "marker": ":CURV", "length-digits": 7, "block-bytes": 1250000, "block-begins-at": 1250787}
+      ],
+      "code-width-bytes": "BYT_NR",
+      "code-signedness": "BN_FMT",
+      "code-byte-order": "BYT_OR",
+      "two-statements-of-one-length": "NR_PT * BYT_NR equals the declared block length in all five records observed. They are independent statements of the same quantity, so a file where they disagree is damaged rather than a choice between them."
+    }
+  },
+  "fields": [
+    {"long": "NR_PT", "short": "NR_P", "shape": "integer", "source": "documented", "seen-in-files": 4,
+     "holds": "The number of points in the record. Documented as the number of data points where PT_FMT is Y and the number of min-max pairs where PT_FMT is ENV; the second half disagrees with the one ENV file observed, under not-understood."},
+    {"long": "BYT_NR", "short": "BYT_N", "shape": "integer", "source": "documented", "seen-in-files": 4,
+     "holds": "Bytes per sample code. Documented as an integer in the range 1 to 2."},
+    {"long": "BIT_NR", "short": "BIT_N", "shape": "integer", "source": "documented", "seen-in-files": 4,
+     "holds": "Bits per sample code. Documented as 8 or 16 and as changing together with BYT_NR. Observed equal to eight times BYT_NR in all five records."},
+    {"long": "ENCDG", "short": "ENC", "shape": "word", "source": "documented", "seen-in-files": 4,
+     "holds": "The encoding of the block. Documented as ASCii or BINary, and that binary requires knowledge of BYT_NR, BIT_NR, BN_FMT and BYT_OR."},
+    {"long": "BN_FMT", "short": "BN_F", "shape": "word", "source": "documented", "seen-in-files": 4,
+     "holds": "How a code is signed. Documented: RI is signed integer representation, RP is positive integer representation."},
+    {"long": "BYT_OR", "short": "BYT_O", "shape": "word", "source": "inferred", "seen-in-files": 4,
+     "holds": "The byte order of a two-byte code. Documented only as one of the four items binary encoding requires; the manual read here does not define it. Read as most significant byte first for MSB, supported by the measurement under conversion.corroboration."},
+    {"long": "WFID", "short": "WFI", "shape": "quoted string", "source": "documented", "seen-in-files": 4,
+     "holds": "Six comma-separated fields: source, coupling, vertical scale of the unzoomed waveform, horizontal scale of the unzoomed waveform, record length, acquisition mode. Observed to have exactly that shape in all five records."},
+    {"long": "PT_FMT", "short": "PT_F", "shape": "word", "source": "documented", "seen-in-files": 4,
+     "holds": "Documented as ENV or Y."},
+    {"long": "XUNIT", "short": "XUN", "shape": "quoted string", "source": "documented", "seen-in-files": 4,
+     "holds": "At most three alphabetic characters naming the horizontal unit."},
+    {"long": "XINCR", "short": "XIN", "shape": "real", "source": "documented", "seen-in-files": 4,
+     "holds": "The interval between points, in XUNIT."},
+    {"long": "XZERO", "short": "XZE", "shape": "real", "source": "documented", "seen-in-files": 4,
+     "holds": "The position, in XUNIT, of the first sample, relative to the trigger."},
+    {"long": "PT_OFF", "short": "PT_O", "shape": "integer", "source": "observed", "seen-in-files": 4,
+     "holds": "Part of the documented preamble response and not defined in the manual read here. Observed as 0 in all five records."},
+    {"long": "YUNIT", "short": "YUN", "shape": "quoted string", "source": "documented", "seen-in-files": 4,
+     "holds": "At most three alphabetic characters naming the vertical unit."},
+    {"long": "YMULT", "short": "YMU", "shape": "real", "source": "documented", "seen-in-files": 4,
+     "holds": "The vertical scale factor per digitizing level, in YUNIT per level."},
+    {"long": "YOFF", "short": "YOF", "shape": "real", "source": "documented", "seen-in-files": 4,
+     "holds": "The vertical position in digitizing levels. Not an integer in every file: -500.0000E-3 observed in one."},
+    {"long": "YZERO", "short": "YZE", "shape": "real", "source": "documented", "seen-in-files": 4,
+     "holds": "The vertical offset, in YUNIT."},
+    {"long": "VSCALE", "short": null, "shape": "real", "source": "inferred", "seen-in-files": 4,
+     "holds": "Not in the documented WFMPre group. Observed to equal the volts per division in the WFID string in all five records. Read as the vertical scale of the channel."},
+    {"long": "HSCALE", "short": null, "shape": "real", "source": "inferred", "seen-in-files": 4,
+     "holds": "Not in the documented WFMPre group. Observed to equal the seconds per division in the WFID string in four of five records and to disagree in the fifth, under not-understood."},
+    {"long": "VPOS", "short": null, "shape": "real", "source": "inferred", "seen-in-files": 4,
+     "holds": "Not in the documented group. Read as the vertical position in divisions, which is what makes the identity under conversion.corroboration hold."},
+    {"long": "VOFFSET", "short": null, "shape": "real", "source": "observed", "seen-in-files": 4,
+     "holds": "Not in the documented group. Observed as 0.0E+0 in all five records, so no file here separates it from a zero term."},
+    {"long": "HDELAY", "short": null, "shape": "real", "source": "inferred", "seen-in-files": 4,
+     "holds": "Not in the documented group. Observed to equal XZERO + NR_PT * XINCR / 2, the time at the centre of the record, in all five records."},
+    {"long": "DOMAIN", "short": null, "shape": "word", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group and not explained by anything here."},
+    {"long": "WFMTYPE", "short": null, "shape": "word", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group and not explained by anything here."},
+    {"long": "CENTERFREQUENCY", "short": null, "shape": "real", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group. Observed as 0.0E+0."},
+    {"long": "SPAN", "short": null, "shape": "real", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group. Observed as 0.0E+0."},
+    {"long": "REFLEVEL", "short": null, "shape": "real", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group. Observed as 0.0E+0."},
+    {"long": "COMP", "short": null, "shape": "word", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group. Observed as COMPOSITE_YT."},
+    {"long": "FILTERF", "short": null, "shape": "integer", "source": "observed", "seen-in-files": 1,
+     "holds": "Not in the documented group. Observed as 100000000."}
+  ],
+  "observed-values": {
+    "counted-in": "files, out of four, against the long field name",
+    "BYT_NR": {"2": 3, "1": 1},
+    "BIT_NR": {"16": 3, "8": 1},
+    "ENCDG": {"BINARY": 1, "BIN": 3},
+    "BN_FMT": {"RI": 4},
+    "BYT_OR": {"MSB": 4},
+    "PT_FMT": {"Y": 3, "ENV": 1},
+    "XUNIT": {"s": 4},
+    "YUNIT": {"V": 4},
+    "PT_OFF": {"0": 4},
+    "DOMAIN": {"TIME": 1},
+    "WFMTYPE": {"ANALOG": 1},
+    "COMP": {"COMPOSITE_YT": 1},
+    "WFID-acquisition-mode": {"Sample mode": 3, "Pk Detect mode": 1},
+    "WFID-coupling": {"DC coupling": 4},
+    "WFID-source": {"Ch1": 1, "Ch2": 1, "Ch4": 1, "Ref1": 1},
+    "never-observed": ["ENCDG ASCii", "BN_FMT RP", "BYT_OR LSB"]
+  },
+  "conversion": {
+    "value": {
+      "formula": "value = (code[i] - YOFF) * YMULT + YZERO",
+      "unit": "YUNIT",
+      "source": "documented",
+      "quotation": "YMUlt, YOFf, and YZEro are used to convert waveform record values to YUNit values using the following formula (where dl is the data level; curve_in_dl is a data point in CURVe): value_in_units = ((curve_in_dl - YOFf_in_dl) * YMUlt) + YZEro_in_units."
+    },
+    "time": {
+      "formula": "time = XZERO + (i - PT_OFF) * XINCR",
+      "unit": "XUNIT",
+      "source": "inferred",
+      "why": "XZERO is documented as the position of the first sample and XINCR as the interval between points. PT_OFF is not defined in the manual read here and is zero in every file observed, so the term is written where the field name says it belongs and no file exercises it."
+    },
+    "corroboration": {
+      "identity": "YZERO + YMULT * (0 - YOFF) == -VPOS * VSCALE + VOFFSET",
+      "why-it-is-not-circular": "The two sides share no field. The left is the value at the middle of the digitiser range and the right is the voltage at the middle of the screen.",
+      "observed": [
+        {"record": "example.isf", "left": 9.9, "right": 9.9},
+        {"record": "sample_ENV.isf", "left": 29.8, "right": 29.8},
+        {"record": "sample_Y.isf", "left": -0.12, "right": -0.12},
+        {"record": "T0000CH1.ISF record 1", "left": 0.1, "right": 0.1},
+        {"record": "T0000CH1.ISF record 2", "left": 0.1, "right": 0.1}
+      ],
+      "byte-order-measurement": "Under the other byte order the samples of the three two-byte files span 0.0017, 0.0023 and 0.040 of a division; under MSB they span 0.44, 0.60 and 4.9 divisions."
+    }
+  },
+  "variation-across-the-four-files": [
+    "The keyword spelling, long in one file and short in three, consistent inside a file.",
+    "The marker spelling, :CURVE in the file with long keywords and :CURV in the three with short ones. Observed to travel with the keyword spelling, which is one observation and not a rule.",
+    "The field set: twenty-one fields in all four files, five more in example.isf alone, two more in T0000CH1.ISF alone. A reader requiring an exact field set refuses three of these four files.",
+    "The sample width, two bytes in three files and one byte in one.",
+    "Every low byte of every code is zero in all three two-byte files, so a two-byte file here is an eight-bit acquisition stored in sixteen bits. A reader must not use that to detect anything, because the next file may fill it."
+  ],
+  "not-understood": [
+    "NR_PT under PT_FMT ENV contradicts the documentation. Documented as the number of min-max pairs; the one ENV file has NR_PT 1000000, BYT_NR 2 and a block of 2000000 bytes, which is one code per point. Under the documented reading the block would hold 4000000 bytes. A reader computing the sample count as NR_PT * 2 for ENV reads twice the file that is there. One file cannot settle it.",
+    "How an envelope maps onto the time axis. If those 1000000 codes are 500000 min-max pairs the record covers 5 seconds, while XZERO of -5 with a symmetric window and the WFID scale of 1 second per division both say 10 seconds. Each pair covering two sample intervals reconciles them and has nothing behind it.",
+    "HSCALE disagrees with the record in one file of four. In example.isf, XINCR * NR_PT is 4 microseconds, which is 400 nanoseconds per division over ten divisions, and WFID says 400.0ns/div, while HSCALE says 100.0000E-9. The documentation calls the WFID horizontal scale the unzoomed one, so a file saved from a zoomed view would explain it, untested.",
+    "Whether the two statements of NR_PT in one preamble can disagree. They agree in all five records observed.",
+    "Whether a quoted value may contain a semicolon. None observed does, so splitting the preamble on semicolons before handling quotes works on these four files and would be wrong on a comment field somebody typed one into.",
+    "Whether a preamble may exceed 512 bytes. The longest observed is 449.",
+    "What PT_OFF does when it is not zero. It is zero in every record here.",
+    "The twelve fields no document read for this note names. FILTERF and COMP are the two that look like they change how the samples should be read, and neither is explained.",
+    "Whether VOFFSET is separate from VPOS. It is zero in every record here, so the identity above cannot separate the two terms.",
+    "What the second record in a two-record file is. Its preamble declares the same channel, length and time base as the first.",
+    "ENCDG ASCii, BN_FMT RP and BYT_OR LSB are documented or named and absent from all four files. Anything a reader does with them is untested."
+  ]
+}

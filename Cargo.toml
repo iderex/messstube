@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/messstube-core",
     "crates/messstube-cli",
+    "crates/readers/messstube-tektronix-isf",
     "crates/corpus-fetch",
     "crates/harness-needs-serial-port",
     "xtask",

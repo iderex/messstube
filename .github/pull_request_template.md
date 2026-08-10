@@ -1,6 +1,8 @@
 ## Which issue does this close?
 
-<!-- Closes #NNN. If this closes no issue, say why here. -->
+<!-- Closes #NNN. A line in this shape is what the hygiene check looks for, and
+     it refuses a description that carries none. If there is no issue for this
+     change yet, open one first; CONTRIBUTING.md says why. -->
 
 ## How was it verified?
 
