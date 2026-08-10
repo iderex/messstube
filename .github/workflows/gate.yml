@@ -109,6 +109,58 @@ jobs:
         # time in a less readable form.
         run: cargo gate build test
 
+  coverage:
+    # Referenced by the required-check set in #30 under exactly this name.
+    name: Coverage on the parsing surface
+    runs-on: ubuntu-latest
+    # Longer than the format and lint jobs because the step below builds the
+    # coverage tool from source and then runs the suite a second time under
+    # instrumentation. What it is waiting on is two compiles.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Install the coverage tool
+        # Built from crates.io with the pinned toolchain rather than fetched
+        # through a third-party action, for the same reason the dependency job
+        # builds its own checker: the gate's dependency surface stays the
+        # registry and the toolchain the tree already pins. The version is
+        # pinned in ONE file so that a new release of the tool cannot turn a
+        # green mainline red overnight.
+        #
+        # `llvm-tools-preview` is added here rather than in
+        # `rust-toolchain.toml`, so that every clone does not download a
+        # component only this leg needs. A contributor running the leg locally
+        # is told the same command by the verb itself when it cannot start.
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .github/cargo-llvm-cov-version)"
+          rustup component add llvm-tools-preview
+          cargo install --locked "cargo-llvm-cov@${version}"
+          cargo llvm-cov --version
+      - name: Run the coverage leg of the gate verb
+        run: cargo gate coverage
+      - name: Keep the report whether the bar was met or not
+        # `always()` rather than only on success, and that is the point of the
+        # step. The report is exactly what somebody needs in order to see WHY
+        # the bar was missed, and a run that throws it away on failure keeps it
+        # only in the case where nobody wants it.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: target/coverage-lcov.info
+          if-no-files-found: warn
+
   minimum-toolchain:
     # Referenced by the required-check set in #30 under exactly this name.
     name: Minimum toolchain build
