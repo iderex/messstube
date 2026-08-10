@@ -24,20 +24,36 @@
 //! not fetch is not refused for saying so. That is the shape of pattern
 //! somebody turns off within a week.
 //!
-//! THIS FILE IS NOT JUDGED BY ITS OWN PATTERNS AND THAT IS A REAL RESIDUAL. It
-//! holds them as string literals, so judging itself would refuse itself on
-//! every run. The exclusion is by path, it is printed with the count on every
-//! run rather than left in this header, and what stands behind this one file is
-//! that it is one file and a reader is looking at it.
+//! TWO FILES ARE NOT JUDGED BY THESE PATTERNS AND THAT IS A REAL RESIDUAL. Both
+//! hold the words as string literals, so judging them would refuse them on every
+//! run: this one because it is where the patterns are written, and
+//! `crates/messstube-core/tests/reader_invariants.rs` because it refuses the
+//! same words in reader source for a different reason and has to spell them to
+//! do it. The exclusions are by path, they are printed with the count on every
+//! run rather than left in this header, and what stands behind them is that they
+//! are two files a reader can open. A test that fetched and was named either of
+//! those two paths would pass this check, and nothing here would say so.
 
 #![forbid(unsafe_code)]
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// The file this check does not judge, relative to the repository root, written
+/// The files this check does not judge, relative to the repository root, written
 /// with forward slashes the way the report prints a path.
-const NOT_JUDGED: &str = "crates/messstube-core/tests/no_fetch_in_a_test.rs";
+///
+/// Each one is here because it carries the words this check looks for as string
+/// literals it needs in order to do its own job. Nothing else belongs on this
+/// list: a test excused for any other reason is a test excused.
+const NOT_JUDGED: &[&str] = &[
+    // Where the patterns below are written.
+    "crates/messstube-core/tests/no_fetch_in_a_test.rs",
+    // The greppable reader invariants from #23, which refuse a socket, a clock,
+    // an environment read, an opened file and a launched program in reader
+    // source. Four of those words are also words this check looks for, and that
+    // file has to spell them to refuse them.
+    "crates/messstube-core/tests/reader_invariants.rs",
+];
 
 /// One way a test could fetch: the words that mean it, and what to do instead.
 struct Route {
@@ -157,7 +173,7 @@ fn test_files_under(root: &Path) -> Result<Vec<String>, String> {
                 }
                 written.push_str(text);
             }
-            if written.contains("/tests/") && written != NOT_JUDGED {
+            if written.contains("/tests/") && !NOT_JUDGED.contains(&written.as_str()) {
                 into.push(written);
             }
         }
@@ -327,8 +343,10 @@ fn main() -> ExitCode {
                 }
             }
             println!(
-                "no fetch in a test: {} test target(s) examined, and {NOT_JUDGED} is excluded because it holds the patterns",
-                files.len()
+                "no fetch in a test: {} test target(s) examined, and {} excluded because they hold the patterns: {}",
+                files.len(),
+                NOT_JUDGED.len(),
+                NOT_JUDGED.join(", ")
             );
         }
     }

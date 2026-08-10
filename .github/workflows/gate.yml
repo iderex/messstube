@@ -86,6 +86,33 @@ jobs:
       - name: Run the lint leg of the gate verb
         run: cargo gate lint
 
+  invariants:
+    # Referenced by the required-check set in #30 under exactly this name.
+    #
+    # Its own check rather than a line inside the build-and-test log, which is
+    # what #23 asks for: a reader that went around the bounded helpers and a
+    # reader whose tests fail are different failures, and a reviewer should be
+    # able to tell them apart from the check list. The target it runs also runs
+    # under the test leg, so a contributor typing `cargo test --workspace` still
+    # gets the verdict.
+    name: Reader invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+      - name: Run the invariants leg of the gate verb
+        run: cargo gate invariants
+
   build-and-test:
     # Referenced by the required-check set in #30 under exactly this name.
     name: Build and test
