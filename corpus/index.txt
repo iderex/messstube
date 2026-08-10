@@ -8,6 +8,11 @@
 # A line whose first character is # is a comment. A blank line ends an entry.
 # Every other line is a field, written as `name: value`.
 #
+# Every entry says which of the two tiers it is in, in its `location` field.
+# `here` is a file that ships in this repository, under corpus/files/, and its
+# absence reds the run. Anything else is a location the file is fetched from by
+# `cargo corpus fetch`, and its absence is a skip the run counts and names.
+#
 # IT DECLARES NO FILE TODAY, AND THAT IS THE STATE OF THE PROJECT RATHER THAN A
 # PLACEHOLDER. No real instrument file has arrived: the first format is
 # docs/decisions/0013-first-format.md, the first reader is #48, and whether

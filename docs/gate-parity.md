@@ -231,6 +231,7 @@ run.
 
 | What is outside the gate | Why it is outside | Where it is covered instead |
 | --- | --- | --- |
+| The external tier of the verification corpus: every corpus file that is described in the index and does not ship in this repository | Those files are not redistributable, which is why they are described rather than shipped, and `docs/decisions/0011-headless-testing.md` forbids a test that reaches the network, so nothing in the gate may fetch them. The gate therefore runs the internal tier only, and a green gate says nothing about a reader against a file it never saw. | `cargo corpus fetch` obtains them on the operator's machine and verifies each one against its digest before it is allowed to stay. What keeps the gap from being a quiet one is that the corpus target prints the count and the identifiers of every entry it could not reach, on every run. #41 |
 | Hardware-attached behaviour: anything that needs an instrument, a serial port or any other device | `docs/decisions/0011-headless-testing.md` keeps an attached instrument out of the default suite, and a gate that can be blocked by a cable is a gate that gets bypassed. No merge waits on an instrument. | The hardware harness, `crates/harness-needs-serial-port`, run by hand with a rig present. The gate compiles and lints it and never runs it, and a test in it refuses if the gate verb or any workflow ever names it. #43 |
 
 That last row is a real gap in coverage and it is the price

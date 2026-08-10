@@ -7,3 +7,12 @@
 # compiling the thing that runs the legs.
 [alias]
 gate = "run --quiet --package xtask --bin xtask --"
+
+# The corpus verb, from #41. Reached the same way and for the same reason: the
+# external tier of the corpus is obtained by a command an operator types, and a
+# word that works on every platform is better than a script that works on one.
+#
+# `cargo corpus` verifies what is already on the machine and reaches nothing.
+# `cargo corpus fetch` is the only invocation in this repository that starts a
+# downloader, and nothing in the suite calls either.
+corpus = "run --quiet --package corpus-fetch --bin corpus-fetch --"

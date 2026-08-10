@@ -32,6 +32,30 @@
 //! not check and names them. Where it does, the corpus is claimed to be here and
 //! both directions have to hold exactly.
 //!
+//! TWO TIERS, FROM #41. Some real files will not be redistributable: an
+//! institution lends a file for verification and does not permit it to be
+//! published. Refusing those means refusing exactly the instruments this
+//! project is least likely to get access to twice. So an entry says where its
+//! file comes from, in [`Entry::location`], and the two tiers are told apart by
+//! that field alone. A file that ships here is expected to be here, and its
+//! absence is the index drifting from the tree. A file that does not ship here
+//! is fetched by the operator with `cargo corpus fetch`, and its absence is a
+//! skip.
+//!
+//! THE SKIP IS THE DANGEROUS HALF AND IT IS PRINTED EVERY TIME. A run that
+//! covered the internal tier only must not be readable as one that covered the
+//! whole corpus and found nothing, so the count and the identifiers of the
+//! entries it could not reach go in the run's own output rather than in a log
+//! line somewhere. The gate runs without the external tier, which is a real
+//! limit on what a green gate means and is recorded as one in
+//! `docs/gate-parity.md`.
+//!
+//! WHAT THE TIER DOES NOT EXCUSE. An external file that IS present is checked
+//! exactly like one that ships here: the digest, the length and the claimant
+//! all have to hold. The tier decides whether absence is allowed and nothing
+//! else, which is why [`not_fetched`] reports only what is missing and never
+//! removes an entry from the checks below.
+//!
 //! THE CHECKS ARE PROVED AGAINST FIXTURE INDEXES RATHER THAN AGAINST THIS
 //! TREE'S. The index in this repository declares no file today, so a check
 //! judged only by it would refuse nothing and its passing would say nothing.
@@ -85,6 +109,7 @@ const DIGEST_LENGTH: usize = 64;
 const FIELDS: &[&str] = &[
     "id",
     "file",
+    "location",
     "hash",
     "bytes",
     "instrument",
@@ -107,6 +132,22 @@ const FIELDS: &[&str] = &[
 /// file the ledger counts as unverified without saying so.
 const INDEPENDENT_VALUE: &[&str] = &["none", "vendor export", "independent implementation"];
 
+/// What an entry of the internal tier writes in its `location`: the file ships
+/// in this repository and is expected under the files directory.
+///
+/// A reserved word rather than an empty value, because an empty value and a
+/// field somebody forgot to fill in look identical, and the two tiers differ in
+/// whether a missing file is a failure.
+const SHIPS_HERE: &str = "here";
+
+/// How an external location is written. One scheme, refused rather than
+/// widened, and the reason is not that the digest could miss a rewritten file:
+/// it could not, and that is what the digest is for. It is that a location is
+/// read by a person deciding whether to run the fetch at all, and a scheme
+/// nobody can authenticate the far end of is a location that person cannot
+/// judge.
+const LOCATION_SCHEME: &str = "https://";
+
 /// One entry, reduced to what the checks act on. The remaining fields are
 /// required and validated for presence; they are read by a person and by the
 /// ledger in #45 rather than by anything here, so keeping copies of them in this
@@ -118,10 +159,25 @@ struct Entry {
     id: String,
     /// The path, relative to the files directory.
     file: String,
+    /// Where the file comes from: `SHIPS_HERE`, or the location the operator
+    /// fetches it from. This is the only thing that decides which tier an entry
+    /// is in, so the two tiers cannot disagree with each other.
+    location: String,
     /// The digest, written the way `DIGEST_PREFIX` fixes.
     hash: String,
     /// The length in bytes the digest was taken over.
     bytes: u64,
+}
+
+impl Entry {
+    /// Whether this entry's file is expected to be in this repository.
+    ///
+    /// The question every tier decision is phrased as, so that a second reading
+    /// of the `location` field cannot spell the comparison differently from the
+    /// first.
+    fn ships_here(&self) -> bool {
+        self.location == SHIPS_HERE
+    }
 }
 
 /// The repository root, derived from where this crate's manifest is at compile
@@ -155,6 +211,19 @@ fn digest_is_well_formed(value: &str) -> bool {
         && digest
             .chars()
             .all(|character| character.is_ascii_digit() || matches!(character, 'a'..='f'))
+}
+
+/// Whether a location says one of the two things a location may say.
+///
+/// The reserved word, or a location with a scheme and something after it. A
+/// value that is neither is refused rather than guessed at, because the two
+/// tiers differ in whether a missing file reds the run, and an entry whose tier
+/// nobody can read would be placed in one of them by accident.
+fn location_is_well_formed(value: &str) -> bool {
+    value == SHIPS_HERE
+        || value
+            .strip_prefix(LOCATION_SCHEME)
+            .is_some_and(|rest| !rest.is_empty())
 }
 
 /// Whether a path stays inside the files directory and means the same thing on
@@ -215,6 +284,13 @@ fn entry_from(block: &[(usize, String, String)]) -> Result<Entry, Vec<String>> {
             ));
         }
     }
+    if let Some(location) = value_of("location") {
+        if !location_is_well_formed(location) {
+            refusals.push(format!(
+                "entry at line {at} states the location {location}, and a location is {SHIPS_HERE} or a {LOCATION_SCHEME} location the operator fetches it from"
+            ));
+        }
+    }
     if let Some(hash) = value_of("hash") {
         if !digest_is_well_formed(hash) {
             refusals.push(format!(
@@ -253,6 +329,7 @@ fn entry_from(block: &[(usize, String, String)]) -> Result<Entry, Vec<String>> {
             line: at,
             id: value_of("id").unwrap_or_default().to_owned(),
             file: value_of("file").unwrap_or_default().to_owned(),
+            location: value_of("location").unwrap_or_default().to_owned(),
             hash: value_of("hash").unwrap_or_default().to_owned(),
             bytes,
         })
@@ -326,12 +403,21 @@ fn parse_index(text: &str) -> Result<Vec<Entry>, Vec<String>> {
 /// A pure function over the entries and a listing, so that the property can be
 /// proved without a corpus and without a filesystem. The only thing the real run
 /// adds is where the listing came from.
+///
+/// THE ABSENT FILE IS THE ONE DIRECTION THE TIER CHANGES. An entry that ships
+/// here and is not here is the index drifting from the tree, which is what this
+/// direction was written for. An entry that does not ship here and is not here
+/// is a file the operator has not fetched, which is the ordinary state of every
+/// checkout including the one the gate runs in; it is reported by
+/// [`not_fetched`] and counted, never refused. The other direction does not
+/// move: a file in the corpus that no entry names is a file whose terms and
+/// provenance nobody recorded, whichever tier it would have been in.
 fn disagreements(entries: &[Entry], present: &[String]) -> Vec<String> {
     let mut found = Vec::new();
     for entry in entries {
-        if !present.iter().any(|path| path == &entry.file) {
+        if entry.ships_here() && !present.iter().any(|path| path == &entry.file) {
             found.push(format!(
-                "the entry {} names {}, which is not in the corpus",
+                "the entry {} names {}, which is not in the corpus and which its location says ships here",
                 entry.id, entry.file
             ));
         }
@@ -344,6 +430,23 @@ fn disagreements(entries: &[Entry], present: &[String]) -> Vec<String> {
         }
     }
     found
+}
+
+/// The external entries whose files are not on this machine.
+///
+/// What the run could not check, as opposed to what it checked and found
+/// correct. The caller prints the count and every identifier, because a corpus
+/// test that could not run has to be visible in the same output as one that
+/// passed: a partial run that says nothing about being partial is read as a
+/// whole one, and the external tier is absent from every gate run by design.
+///
+/// A pure function over the entries and a listing, for the same reason
+/// [`disagreements`] is one.
+fn not_fetched<'a>(entries: &'a [Entry], present: &[String]) -> Vec<&'a Entry> {
+    entries
+        .iter()
+        .filter(|entry| !entry.ships_here() && !present.iter().any(|path| path == &entry.file))
+        .collect()
 }
 
 /// Where a file's bytes disagree with what its entry recorded.
@@ -466,6 +569,7 @@ struct Proof {
 const VALID_ENTRY: &str = "\
 id: example-one
 file: example/one.bin
+location: here
 hash: SHA-256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 bytes: 3
 instrument: an instrument that does not exist, model none
@@ -488,6 +592,17 @@ fn valid_entry() -> Result<Entry, String> {
         .map_err(|refusals| format!("the base fixture was refused: {}", refusals.join("; ")))?
         .pop()
         .ok_or_else(|| "the base fixture parsed to no entry".to_owned())
+}
+
+/// The base fixture moved to the other tier, and nothing else changed.
+///
+/// One field apart from [`valid_entry`], so that a proof comparing the two is
+/// comparing the tier and not two unrelated entries.
+fn external_entry() -> Result<Entry, String> {
+    parse_index(&with_field("location", "https://example.org/one.bin"))
+        .map_err(|refusals| format!("the external fixture was refused: {}", refusals.join("; ")))?
+        .pop()
+        .ok_or_else(|| "the external fixture parsed to no entry".to_owned())
 }
 
 /// A copy of the base fixture with one line replaced.
@@ -736,6 +851,83 @@ const PROOFS: &[Proof] = &[
             accepted(&with_field("independent-value", "vendor export"))
         },
     },
+    Proof {
+        what: "a location that is neither the reserved word nor a fetchable one is refused",
+        run: || {
+            // The three an index actually carries. Prose is what somebody
+            // writes when they mean "ask the institute"; the bare host is the
+            // scheme left off; and a scheme with nothing after it is a line
+            // somebody started and did not finish.
+            for unusable in [
+                "ask the institute that lent it",
+                "example.org/one.bin",
+                LOCATION_SCHEME,
+            ] {
+                refused_because(&with_field("location", unusable), "and a location is")?;
+            }
+            // The near miss, in both tiers, because a check that refuses either
+            // one refuses every corpus this project can have.
+            accepted(&with_field("location", SHIPS_HERE))?;
+            accepted(&with_field("location", "https://example.org/one.bin"))
+        },
+    },
+    Proof {
+        what: "an absent file reds the run for the tier that ships here and is a skip for the tier that does not",
+        run: || {
+            let ships_here = valid_entry()?;
+            let found = disagreements(std::slice::from_ref(&ships_here), &[]);
+            if found.len() != 1 {
+                return Err(format!("expected one disagreement, got {found:?}"));
+            }
+            if !not_fetched(std::slice::from_ref(&ships_here), &[]).is_empty() {
+                return Err("a file that ships here was counted as unfetched".to_owned());
+            }
+
+            // The one-change neighbour: the same entry, the same absent file,
+            // and a location saying it does not ship here. This is the whole
+            // of #41 in one comparison, and the direction that matters is that
+            // the refusal turns into a count rather than disappearing.
+            let external = external_entry()?;
+            let quiet = disagreements(std::slice::from_ref(&external), &[]);
+            if !quiet.is_empty() {
+                return Err(format!("an unfetched external file was refused: {quiet:?}"));
+            }
+            let counted = not_fetched(std::slice::from_ref(&external), &[]);
+            match counted.first() {
+                Some(entry) if entry.id == external.id => Ok(()),
+                other => Err(format!(
+                    "an unfetched external file was not counted: {:?}",
+                    other.map(|entry| entry.id.as_str())
+                )),
+            }
+        },
+    },
+    Proof {
+        what: "an external file that is present is checked like any other and is not counted as unfetched",
+        run: || {
+            let external = external_entry()?;
+            let present = vec![external.file.clone()];
+            let counted = not_fetched(std::slice::from_ref(&external), &present);
+            if !counted.is_empty() {
+                return Err("a fetched external file was still counted as unfetched".to_owned());
+            }
+            // The tier decides whether absence is allowed and nothing else. A
+            // file fetched from somewhere else is the one most worth hashing,
+            // because it arrived over a route this repository does not control.
+            let found = content_disagreements(&external, b"abd");
+            if !found.iter().any(|line| line.contains("hashes to")) {
+                return Err(format!(
+                    "a changed byte in an external file was not refused: {found:?}"
+                ));
+            }
+            let quiet = content_disagreements(&external, VALID_BYTES);
+            if quiet.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("the near miss was refused: {quiet:?}"))
+            }
+        },
+    },
 ];
 
 /// Run every proof and report how many bit.
@@ -748,6 +940,72 @@ fn prove(into: &mut Vec<String>) -> usize {
         }
     }
     passed
+}
+
+/// Check every entry against the corpus that is on this machine: how many were
+/// verified against their digest, and which of them could not be reached.
+///
+/// A function of its own rather than a branch inside `main`, because the two
+/// branches answer different questions. This one is about a machine that has
+/// the corpus, where both directions have to hold exactly; the other is about a
+/// machine that has none of it, where every entry is a skip.
+fn check_what_is_here(
+    entries: &[Entry],
+    files: &Path,
+    failed: &mut Vec<String>,
+) -> (usize, Vec<String>) {
+    let mut verified = 0usize;
+    let mut unfetched: Vec<String> = Vec::new();
+
+    let present = match files_under(files) {
+        Err(why) => {
+            failed.push(why);
+            return (verified, unfetched);
+        }
+        Ok(present) => present,
+    };
+
+    for disagreement in disagreements(entries, &present) {
+        failed.push(disagreement);
+    }
+    for entry in not_fetched(entries, &present) {
+        unfetched.push(format!(
+            "  not fetched: {} ({}) from {}",
+            entry.id, entry.file, entry.location
+        ));
+    }
+    for entry in entries {
+        // Only what is there. An entry naming a file that is not in the corpus
+        // has either been refused above or counted as unfetched, and reading it
+        // a second time would report the same one problem twice, in the second
+        // case as an operating system message in whatever language the machine
+        // is set to.
+        if !present.iter().any(|path| path == &entry.file) {
+            continue;
+        }
+        let path = files.join(&entry.file);
+        match std::fs::read(&path) {
+            Err(err) => failed.push(format!("{} could not be read: {err}", entry.file)),
+            Ok(bytes) => {
+                let found = content_disagreements(entry, &bytes);
+                if found.is_empty() {
+                    verified = verified.saturating_add(1);
+                }
+                for disagreement in found {
+                    failed.push(disagreement);
+                }
+                // And which reader claims it. The prefix comes from the bytes
+                // already read rather than from a second open, and `identify`
+                // bounds it again on the way in.
+                let answer = identify(COMPILED_IN, &bytes, Some(&entry.file));
+                if let Some(disagreement) = claimant_disagreement(entry, &answer) {
+                    failed.push(disagreement);
+                }
+            }
+        }
+    }
+
+    (verified, unfetched)
 }
 
 fn main() -> ExitCode {
@@ -781,54 +1039,26 @@ fn main() -> ExitCode {
         },
     };
 
-    let mut verified = 0usize;
     if files.is_dir() {
-        match files_under(&files) {
-            Err(why) => failed.push(why),
-            Ok(present) => {
-                for disagreement in disagreements(&entries, &present) {
-                    failed.push(disagreement);
-                }
-                for entry in &entries {
-                    // Only what is there. An entry naming a file that is not in
-                    // the corpus has already been refused above, and reading it
-                    // a second time would report the same one problem twice, in
-                    // the second case as an operating system message in whatever
-                    // language the machine is set to.
-                    if !present.iter().any(|path| path == &entry.file) {
-                        continue;
-                    }
-                    let path = files.join(&entry.file);
-                    match std::fs::read(&path) {
-                        Err(err) => {
-                            failed.push(format!("{} could not be read: {err}", entry.file));
-                        }
-                        Ok(bytes) => {
-                            let found = content_disagreements(entry, &bytes);
-                            if found.is_empty() {
-                                verified = verified.saturating_add(1);
-                            }
-                            for disagreement in found {
-                                failed.push(disagreement);
-                            }
-                            // And which reader claims it. The prefix comes from
-                            // the bytes already read rather than from a second
-                            // open, and `identify` bounds it again on the way
-                            // in.
-                            let answer = identify(COMPILED_IN, &bytes, Some(&entry.file));
-                            if let Some(disagreement) = claimant_disagreement(entry, &answer) {
-                                failed.push(disagreement);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let (verified, unfetched) = check_what_is_here(&entries, &files, &mut failed);
         println!(
-            "corpus: {} entr(ies), {verified} verified against their digest, {} failure(s)",
+            "corpus: {} entr(ies), {verified} verified against their digest, {} not fetched, {} failure(s)",
             entries.len(),
+            unfetched.len(),
             failed.len()
         );
+        // Named rather than counted, and printed whether or not anything
+        // failed. A count on its own tells a reader that something was missed
+        // and not which corpus test it was, and the entry that goes unfetched
+        // for a year is the one nobody can name.
+        for line in &unfetched {
+            println!("{line}");
+        }
+        if !unfetched.is_empty() {
+            println!(
+                "  those are the external tier, and `cargo corpus fetch` is what obtains them"
+            );
+        }
     } else {
         // The whole corpus is absent, which is not a failure and is also not a
         // pass. What it is has to be printed, entry by entry, or a run that
@@ -842,7 +1072,10 @@ fn main() -> ExitCode {
             "the corpus files were not found under {CORPUS_ROOT}/{FILES_DIRECTORY}/ in this checkout"
         );
         for entry in &entries {
-            println!("  skipped {} ({})", entry.id, entry.file);
+            println!(
+                "  skipped {} ({}) from {}",
+                entry.id, entry.file, entry.location
+            );
         }
         if entries.is_empty() {
             println!("  and the index declares no file, so nothing was skipped either");

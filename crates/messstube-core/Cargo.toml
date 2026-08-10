@@ -14,6 +14,13 @@ publish.workspace = true
 name = "corpus"
 harness = false
 
+# The no-fetch check runs without the harness for the same reason again: it has
+# to print how many test targets it examined and which one it excluded, and a
+# guard whose scope is invisible is a guard nobody can size. From #41.
+[[test]]
+name = "no_fetch_in_a_test"
+harness = false
+
 # The reader-invariant check runs without the harness for the same reason: it has
 # to print how many reader files it examined. That number is zero today, and a
 # run that did not say so would read as reader code having been checked and found

@@ -137,6 +137,12 @@ reading this repository can check all of that on a machine holding none of the
 files. Whether the files themselves ship, sit in a second repository, or are
 fetched one at a time is a decision that changes a directory and no entry.
 
+Entry 2 of #1 is still open, and the tiers below are not an answer to it. They
+are what makes every answer to it workable: a file that may be published writes
+`location: here`, a file that may not writes where it is fetched from, and a
+corpus that is entirely one or entirely the other is the same mechanism with one
+tier empty.
+
 Nothing in an entry names a path into this repository. A file is named by a path
 relative to the files directory, and where that directory is written down once,
 in `CORPUS_ROOT` and `FILES_DIRECTORY` in
@@ -147,6 +153,53 @@ The digest is what makes that safe rather than merely tidy. A file is identified
 by what it contains and not by where it was found, so a file that has been moved
 is the same file and a file that has been replaced is not, wherever either one
 sits.
+
+## The two tiers
+
+Some real files will not be redistributable. An institution lends a file for
+verification and does not permit it to be published; a measurement contains
+something the owner will not release. Refusing those files means refusing
+exactly the instruments this project is least likely to get access to twice, so
+the corpus has two tiers and every entry says which one it is in.
+
+A file that ships here is in the repository, under the files directory, and its
+entry writes `location: here`. A file that does not ship here is described here
+and fetched from somewhere else, and its entry writes the location it is fetched
+from. Both tiers carry every field, including the digest, and the digest is what
+makes the second one safe: the file is verified on arrival, and a mismatch is a
+hard failure rather than a warning.
+
+Fetching is a command the operator runs, and it never happens during a test run.
+`docs/decisions/0011-headless-testing.md` forbids a test that reaches the
+network, and a corpus test that quietly downloaded what it could not find would
+pass everywhere its author works and red on a measurement machine with no route
+out. The command is
+
+    cargo corpus fetch
+
+which obtains the external tier and verifies every file against its entry before
+letting it stay, and
+
+    cargo corpus
+
+which verifies what is already on the machine and reaches nothing. Fetching is
+off by default, which is why it is a word somebody types rather than the
+behaviour of a bare invocation.
+
+The tier decides one thing and nothing else: whether a missing file is a
+failure. An external file that is present is hashed, measured and identified
+exactly like one that ships here.
+
+### The gate runs the internal tier only
+
+That is a real limit on what a green gate means, and it is recorded as one in
+`docs/gate-parity.md` rather than left to be discovered. The gate has no
+external files, so every external entry is a corpus test that did not run.
+
+What keeps it honest is that the count and the identifiers are printed on every
+run, by the target itself, whether or not anything failed. A count on its own
+says something was missed and not what, and the entry that goes unfetched for a
+year is the one nobody can name.
 
 ## The format of the index
 
@@ -160,14 +213,15 @@ There is no dependency behind that choice and no serialisation format to agree
 on. The index is read by one check today and by the verification ledger in #45
 later, and both are in this tree; adding a parser for somebody else's format to
 this workspace would be the first dependency it carries, taken for a file with
-thirteen fields.
+fourteen fields.
 
-The thirteen fields, all of them required on every entry:
+The fourteen fields, all of them required on every entry:
 
 | Field | What it holds |
 | --- | --- |
 | `id` | The stable identifier, unique across the index. |
 | `file` | The path, relative to the files directory. |
+| `location` | `here`, or the `https://` location the file is fetched from. |
 | `hash` | The digest, written `SHA-256:` and sixty-four lower-case hexadecimal characters. |
 | `bytes` | The length, in bytes, that the digest was taken over. |
 | `instrument` | The instrument that produced the file, including the model. |
@@ -188,8 +242,11 @@ The list is closed in both directions. A missing field is refused and so is a
 field name that is not on it, so that `term:` written for `terms:` is a refusal
 rather than a value that silently went nowhere.
 
-Three fields carry a fixed shape rather than free text, and each is refused when
-it does not have it. `hash` names its algorithm, because a digest recorded
+Four fields carry a fixed shape rather than free text, and each is refused when
+it does not have it. `location` says `here` or a location with a scheme and
+something after it, because it is the field the two tiers are told apart by and
+an entry whose tier nobody can read would be placed in one of them by accident.
+`hash` names its algorithm, because a digest recorded
 without one cannot be checked once a second algorithm exists and the corpus is
 meant to outlast that. `arrived` is a calendar date, because `9.8.26` sorts
 wrongly and means two things in two countries. `independent-value` says one of
@@ -204,14 +261,21 @@ check follows whatever the entry names.
 
 ## The two directions
 
-A file in the corpus with no entry is a failure. An entry naming a file that is
-not in the corpus is a failure. Both, on every run.
+A file in the corpus with no entry is a failure. An entry of the internal tier
+naming a file that is not in the corpus is a failure. Both, on every run.
 
 The two hide opposite problems. A file with no entry is a file whose terms and
 provenance nobody recorded, which is exactly what the rules above are for. An
 entry with no file is an index that has drifted from what is there, and it is the
 one that makes a corpus test quietly cover less than it says. A check that looks
 one way lets one of them stand permanently.
+
+The tier moves one of the two and only one. An entry that does not ship here and
+whose file is not on this machine is a file the operator has not fetched, which
+is the ordinary state of every checkout including the one the gate runs in: it
+is counted and named, never refused. The other direction does not move, because
+a file in the corpus that no entry names is a file whose terms nobody recorded
+whichever tier it would have been in.
 
 Every file that is present is hashed on every run and compared with its entry,
 and so is its length. A digest that does not match the bytes is a failure. This
@@ -227,8 +291,15 @@ failure. What it must never be is invisible.
 The two states are told apart by one question: whether the files directory exists
 at all. Where it does not, the corpus is not here, and the run prints how many
 entries it could not check and names them. Where it does, the corpus is claimed
-to be here and both directions have to hold exactly, with no entry excused for
-being inconvenient.
+to be here and both directions have to hold exactly, with no entry of the
+internal tier excused for being inconvenient.
+
+An external entry inside a corpus that is here is the third state, and it is a
+skip of its own: the operator has the corpus and has not fetched that file. The
+run counts those separately from the entries it verified, names each one with the
+location it comes from, and says which command obtains them. That count is
+printed on every run and not only when something failed, because the run in which
+it matters most is the green one.
 
 The index is committed either way, so a checkout that cannot find it has lost the
 authority for what the corpus contains, and that is a failure rather than a skip.
