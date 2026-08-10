@@ -1,0 +1,20 @@
+[package]
+name = "messstube-tektronix-isf"
+version = "0.0.0"
+description = "The Tektronix ISF waveform reader."
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The library this reader implements the interface of. The version is written
+# out beside the path because deny.toml refuses a wildcard requirement and sets
+# allow-wildcard-paths = false.
+messstube-core = { path = "../../messstube-core", version = "0.0.0" }
+
+# The lint set is the workspace's, in the root Cargo.toml. A reader crate that
+# wrote its own would be the first place the lossy-cast denials stopped
+# applying, and reader code is what they were written for.
+[lints]
+workspace = true

@@ -43,7 +43,7 @@
 use messstube_core::error::{ReadError, ReadOptions};
 use messstube_core::identify::{Identification, identify, prefix_of};
 use messstube_core::read::{ReadPathError, read_with};
-use messstube_core::reader::{COMPILED_IN, Registry};
+use messstube_core::reader::Registry;
 use messstube_core::write::{self, Values};
 use std::fmt::Write as _;
 use std::io::Write as _;
@@ -454,12 +454,21 @@ fn run(verb: &Verb, registry: Registry, out: &mut dyn std::io::Write) -> Code {
     }
 }
 
+/// The readers this binary links.
+///
+/// `messstube_core::reader::COMPILED_IN` is the registry a build with no reader
+/// crates linked gets, and it stays empty: a reader crate depends on the core,
+/// so the core cannot name one. This is the crate that puts them together,
+/// which is what the interface in #32 says a registry is assembled by, and it
+/// is fixed at link time.
+const LINKED_IN: Registry = Registry::new(&[&messstube_tektronix_isf::READER]);
+
 fn main() -> ExitCode {
     let mut out = std::io::stdout();
     let mut err = std::io::stderr();
 
     let code = match parse(std::env::args().skip(1)) {
-        Ok(verb) => run(&verb, COMPILED_IN, &mut out),
+        Ok(verb) => run(&verb, LINKED_IN, &mut out),
         Err(why) => {
             let _ = writeln!(err, "messstube: {why}");
             let _ = write!(err, "\n{USAGE}");
