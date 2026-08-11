@@ -1,0 +1,236 @@
+# The mutation run, from #29. It seeds a fault and asks whether any test
+# noticed, which is the question coverage is routinely mistaken for answering.
+# For a parser that distinction is sharp: a test that reads a file and checks
+# nothing but the absence of an error executes every line of the reader and
+# survives almost any mutation.
+#
+# WHY THE MEASUREMENT IS NOT ON A PULL REQUEST. A run over this workspace tests
+# hundreds of mutants and each one is a build and a test run of its own, so the
+# wall clock is hours rather than minutes. That is the whole reason the interval
+# is a week and not a change, and the coverage check in
+# `.github/workflows/gate.yml` is what stands on every change instead. The two
+# measure different things and neither replaces the other.
+#
+# THE SCORE DOES NOT GATE, AND THAT IS DELIBERATE RATHER THAN LENIENT. A
+# threshold on a mutation score is met by writing assertions that kill mutants
+# rather than assertions that state something true, and the tests that come out
+# of that are worse than the ones they replaced. #29 carries the argument and
+# `docs/gate-parity.md` records this row as a practice adopted from the reference
+# board rather than as a required context.
+#
+# WHAT DOES FAIL IS THE RUN BREAKING. A job reporting a score of nothing, inside
+# a check that never fails on a low score, cannot be told apart from a job that
+# is working, and that is how a mutation run stays broken across a toolchain
+# change for months. `.github/scripts/read-mutation-report.sh` is the part that
+# refuses, so it is the part that owes a proof it bites.
+#
+# THAT PROOF RUNS ON EVERY PULL REQUEST AND THE MEASUREMENT DOES NOT. They are
+# two jobs for that reason. The guard is what a change can break, it costs a
+# minute, and a guard proven only once a week is a guard that spends six days
+# broken without anybody knowing. The measurement is what costs hours, and
+# nothing about a pull request needs it.
+#
+# THE SCOPE IS THE PARSING SURFACE: the reader crates and the helpers they parse
+# through, which is the surface the coverage bar is already set over. Mutating
+# the command-line tool or the gate verb would spend hours on code whose failures
+# a person notices immediately.
+name: Mutation
+
+on:
+  schedule:
+    # Weekly. The minute is not zero because every scheduled workflow written
+    # with a zero there starts in the same congested minute and waits.
+    - cron: '17 4 * * 1'
+  # So that a fresh number can be produced without waiting a week, which is what
+  # the metrics page needs when a change to the tests is meant to have moved it.
+  workflow_dispatch:
+  pull_request:
+    branches: [ "**" ]
+
+# Deny-all at workflow level. Each job grants only the read it needs.
+permissions: {}
+
+# A superseded run is NOT cancelled for the measurement, unlike every other
+# workflow in this tree, and the group below is shared by both jobs. Two weekly
+# runs overlapping is close to impossible, and the cost of being wrong is
+# asymmetric: a cancelled run leaves no score at all and the next one is a week
+# away.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reader:
+    name: Mutation report reader
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Prove the reader refuses a run that measured nothing
+        # Five crafted reports it has to refuse and one it may not, each with the
+        # exit code asserted. The last case is the near miss and it is the half
+        # that matters most: an ordinary report carrying a mutant nothing caught
+        # has to PASS, because a reader that refuses a low score is exactly the
+        # thing this workflow is written against.
+        run: |
+          set -euo pipefail
+          reader=.github/scripts/read-mutation-report.sh
+          proof="${RUNNER_TEMP}/proof"
+
+          verdict() {
+            set +e
+            output=$("${reader}" "$1" 2>&1)
+            code=$?
+            set -e
+            if [ "${code}" -ne "$2" ]; then
+              echo "::error::${3} was expected to exit $2 and exited ${code}"
+              echo "${output}"
+              exit 1
+            fi
+            echo "ok    ${3}: exit ${code}"
+          }
+
+          mkdir -p "${proof}/no-report"
+          verdict "${proof}/no-report" 1 "a directory holding no report"
+
+          mkdir -p "${proof}/unparseable"
+          printf 'not json at all\n' > "${proof}/unparseable/outcomes.json"
+          verdict "${proof}/unparseable" 1 "a report that does not parse"
+
+          mkdir -p "${proof}/wrong-shape"
+          printf '{"mutants": 400}\n' > "${proof}/wrong-shape/outcomes.json"
+          verdict "${proof}/wrong-shape" 1 "a report that is JSON and carries no outcome list"
+
+          mkdir -p "${proof}/broken-baseline"
+          printf '{"outcomes":[{"scenario":"Baseline","summary":"Failure"}]}\n' \
+            > "${proof}/broken-baseline/outcomes.json"
+          verdict "${proof}/broken-baseline" 1 "a report whose baseline did not pass"
+
+          mkdir -p "${proof}/no-mutants"
+          printf '{"outcomes":[{"scenario":"Baseline","summary":"Success"}]}\n' \
+            > "${proof}/no-mutants/outcomes.json"
+          verdict "${proof}/no-mutants" 1 "a report that tested no mutant"
+
+          mkdir -p "${proof}/half-caught"
+          printf '{"outcomes":[{"scenario":"Baseline","summary":"Success"},{"scenario":{"Mutant":{}},"summary":"CaughtMutant"},{"scenario":{"Mutant":{}},"summary":"MissedMutant"}]}\n' \
+            > "${proof}/half-caught/outcomes.json"
+          verdict "${proof}/half-caught" 0 "an ordinary report with a mutant nothing caught"
+          "${reader}" "${proof}/half-caught" | grep -q 'mutation score: 50.0%'
+          echo "ok    the near miss reports 50.0% and is not refused for it"
+
+      - name: Refuse a wrong invocation
+        # Separate from the five above because it is a different failure: not a
+        # report that says nothing, but a call that never named one. A wrong
+        # invocation reported as a clean run is the shape that turns this whole
+        # job green over nothing.
+        run: |
+          set -euo pipefail
+          set +e
+          .github/scripts/read-mutation-report.sh > /dev/null 2>&1
+          code=$?
+          set -e
+          test "${code}" -eq 2
+          echo "ok    a call naming no directory: exit ${code}"
+
+  mutants:
+    name: Mutation score
+    # Not on a pull request. The job above is what a pull request needs from
+    # this file.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Hours rather than minutes, and that number is the reason this is weekly. It
+    # is a ceiling on a run expected to take most of it, not a budget anybody is
+    # trying to fit inside.
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Report the toolchain this run used
+        run: |
+          cargo --version
+          rustc --version --verbose
+
+      - name: Install the mutation tool
+        # Built from crates.io with the pinned toolchain rather than fetched
+        # through a third-party action, for the same reason every other tool
+        # these checks need is: the supply chain stays the registry and the
+        # toolchain the tree already pins. The version is pinned in
+        # `.github/cargo-mutants-version` so a new release of the tool cannot
+        # move the number on the metrics page without a change here.
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .github/cargo-mutants-version)"
+          cargo install --locked "cargo-mutants@${version}"
+          cargo mutants --version
+
+      - name: Run the mutants
+        # THE PACKAGE LIST IS DERIVED FROM THE TREE RATHER THAN WRITTEN HERE. A
+        # list of reader crates in this file is a list that a second reader joins
+        # the repository without joining, and nothing would say so: the run would
+        # go on reporting a score over the crates somebody remembered. So the
+        # readers come from the directory they live in, the step prints what it
+        # derived, and finding none is a failure rather than a run over the core
+        # crate alone.
+        #
+        # THE COMMAND CARRIES NO `--locked` AND EVERY OTHER RESOLVING COMMAND IN
+        # THIS TREE DOES. cargo-mutants owns the cargo invocation, so the flag
+        # would have to be passed through to a `cargo test` this file does not
+        # write, and the command below is the one that produced the number on
+        # docs/metrics.md rather than a near neighbour of it. Nothing is at stake
+        # today: `Cargo.lock` names the six workspace crates and no external
+        # dependency, so there is no graph for a lockfile to be wrong about. The
+        # day a dependency arrives that stops being true, and nothing here will
+        # say so.
+        #
+        # `|| true` on the run itself is on purpose, and it is the whole of the
+        # no-gating rule in this file. cargo-mutants exits non-zero when a mutant
+        # survived, which is a score and not a failure, so this step's own status
+        # is discarded and the reader below is what decides whether the job is
+        # red. A failure that matters arrives there as a report describing no
+        # measurement.
+        run: |
+          set -euo pipefail
+          packages=(--package messstube-core)
+          while IFS= read -r manifest; do
+            name="$(sed -n 's/^name = "\(.*\)"$/\1/p' "${manifest}" | head -1)"
+            if [ -z "${name}" ]; then
+              echo "::error::${manifest} declares no package name."
+              exit 1
+            fi
+            packages+=(--package "${name}")
+          done < <(find crates/readers -mindepth 2 -maxdepth 2 -name Cargo.toml | sort)
+          if [ "${#packages[@]}" -lt 4 ]; then
+            echo "::error::No reader crate was found under crates/readers. A mutation run over the helpers alone is not the surface this job claims to cover."
+            exit 1
+          fi
+          echo "the parsing surface this run covers: ${packages[*]}"
+          cargo mutants \
+            --jobs 4 \
+            "${packages[@]}" \
+            --output "${RUNNER_TEMP}/mutants" || true
+
+      - name: Read the report and print the score
+        run: .github/scripts/read-mutation-report.sh "${RUNNER_TEMP}/mutants/mutants.out"
+
+      - name: Keep the report whatever the score was
+        # `always()`, because the list of mutants nothing caught is the only
+        # useful output of this job, and a run that throws it away on failure
+        # keeps it exactly when nobody wants it.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report
+          path: ${{ runner.temp }}/mutants/mutants.out/
+          if-no-files-found: warn

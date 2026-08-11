@@ -51,6 +51,10 @@ discovered afterwards. #71 writes it.
 can execute rather than a description. It is on `main`, and it records which of
 its own steps have been run and which have not.
 
+`metrics.md` holds numbers that are reported and never gated on, each with the
+date and the command that produced it. The mutation score is the first of them.
+It is on `main`.
+
 The reader table, which says what each reader has been verified against, is
 generated from the corpus index rather than maintained by hand, and #45 is where
 it is generated and where its address is fixed. It is deliberately absent from
