@@ -48,7 +48,8 @@ machine with no display. #69 writes it.
 discovered afterwards. #71 writes it.
 
 `release-acceptance.md` is what the first release has to do, as a list somebody
-can execute rather than a description. #67 writes it.
+can execute rather than a description. It is on `main`, and it records which of
+its own steps have been run and which have not.
 
 The reader table, which says what each reader has been verified against, is
 generated from the corpus index rather than maintained by hand, and #45 is where
