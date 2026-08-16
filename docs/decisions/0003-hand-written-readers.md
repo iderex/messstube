@@ -16,11 +16,11 @@ that only argues its own side is not a decision.
 
 Kaitai Struct exists, is mature, and is built for exactly this subject. One
 description of a binary layout generates a parser in around a dozen target
-languages. For a project whose stated output is format knowledge rather than one
+languages. For a project whose stated output is format knowledge and not one
 program, that is close to the ideal shape: the knowledge would be written once,
 in a form a person can read, and the implementations would fall out of it.
 
-It is also evidence rather than theory in this field. The most complete existing
+It is also evidence, and not theory, in this field. The most complete existing
 coverage of oscilloscope raw formats is built that way. #56 is the survey that
 measures that coverage against what this board would add, and it starts from the
 same observation.
@@ -68,7 +68,7 @@ description has stopped being a description.
 
 The format description carries it. Every reader publishes one, in a
 machine-readable shape, as documentation. Somebody writing a reader for the same
-format in another language starts from that description rather than from this
+format in another language starts from that description and not from this
 repository's source, which is the property the declarative route was wanted for
 and is the part that survives the rejection.
 
@@ -84,7 +84,7 @@ being given up.
 
 The drift is not accepted as unavoidable. A check that the description and the
 reader accept the same corpus is a debt owed to the verification milestone,
-recorded here as an obligation rather than as an intention: milestone 5 is where
+recorded here as an obligation and not as an intention: milestone 5 is where
 it is discharged, next to the corpus index in #39 and the ledger in #45, because
 those are the places that already know which files a reader is supposed to
 accept. Until that check exists, a description in this repository is documentation

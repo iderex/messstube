@@ -15,8 +15,8 @@ copied it.
 **Two version surfaces, versioned separately.**
 
 The library follows semantic versioning, with the pre-1.0 period used honestly.
-Below 1.0 the interface may change, and the changelog says so at every release
-rather than leaving a caller to discover it. The library reaches 1.0 when the
+Below 1.0 the interface may change, and the changelog says so at every release,
+so no caller has to discover it. The library reaches 1.0 when the
 reader interface has survived three readers from families that do not resemble
 each other, which is the condition the breadth milestone exists to test and which
 the interface review in #59 is where it is judged. Declaring 1.0 before that
@@ -28,7 +28,7 @@ contract is the output a script parses, the exit codes, and the flag names. New
 output fields may be added. Existing ones may not change meaning and may not
 disappear inside a major version. A flag that exists is not renamed.
 
-**The exit code set, fixed here rather than accumulated.**
+**The exit code set, fixed here and never accumulated.**
 
 | Code | Meaning |
 | --- | --- |
@@ -47,13 +47,13 @@ keeping the distinction alive through the tool.
 Code 1 is the generic failure a shell already treats as failure, and it is given
 to the internal error deliberately. A process that faults unexpectedly exits
 nonzero in ways the tool does not choose, so pinning the deliberate internal
-error to 1 keeps the accidental case in the same bucket rather than letting it
+error to 1 keeps the accidental case in the same bucket instead of letting it
 land on a code that means something specific.
 
 ## The reasons
 
 Semantic versioning is what a dependency resolver already understands, so the
-promise is machine-readable rather than a sentence in a readme.
+promise is machine-readable and not a sentence in a readme.
 
 The two surfaces are separated because their audiences update at different
 speeds. A programmer reads a changelog when a build breaks. An operator finds out

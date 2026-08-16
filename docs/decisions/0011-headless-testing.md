@@ -33,7 +33,7 @@ below and its absence is disclosed.
 No test may open a serial, GPIB, USB or other instrument device.
 
 No test may reach the network, including to download a fixture at test time. A
-fixture that is fetched rather than committed makes the suite's verdict depend on
+fixture that is fetched instead of committed makes the suite's verdict depend on
 somebody else's server being up, which is a dependency nobody declared.
 
 No test may depend on the wall clock. Not for a timestamp in expected output,
@@ -48,14 +48,14 @@ writes numbers for a living.
 No test may depend on the environment block, on the working directory, or on a
 path outside the temporary directory the test itself created.
 
-The last three belong here rather than in a style guide because they are the same
+The last three belong here and not in a style guide, because they are the same
 class of defect as the display: a hidden dependency on the machine, which passes
 where it was written and fails months later on somebody else's. The clock, the
 time zone and the locale are the three that get through review most often,
 because nobody wrote them down as environmental.
 
 #42 is where a check refuses a test that reaches for one of these, so this list
-becomes something that fails rather than something that is remembered. The
+becomes something that fails and not something that is remembered. The
 determinism the list produces is also what the byte-identical provenance test in
 #62 rests on.
 
@@ -64,7 +64,7 @@ determinism the list produces is also what the byte-identical provenance test in
 Hardware-bound work is not abandoned by this decision. It moves.
 
 It moves into a separate harness with an honest name, one that says it needs a
-rig rather than one that sounds like a slow unit test. What that harness is and
+rig and does not sound like a slow unit test. What that harness is and
 where it lives is #43. That it must exist separately is decided here.
 
 The harness is never part of the default suite and never part of the merge gate.

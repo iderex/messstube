@@ -5,7 +5,7 @@ Decided 2026-08-08. Raised in #46.
 ## What is being decided
 
 Which format the first reader reads, and on what grounds, recorded before the
-work starts rather than reconstructed from it afterwards.
+work starts, so nothing here is reconstructed from it afterwards.
 
 The question is not which format this project most wants to cover. Everything
 settled in milestone 1 is untested until one format goes all the way through:
@@ -28,7 +28,7 @@ being softened.
 ## The reasons
 
 The four criteria in #46, in order, each answered against something that was
-checked rather than assumed.
+checked and not assumed.
 
 **A real file is obtainable now, without borrowing an instrument.** A
 20463-byte ISF file is public at
@@ -58,7 +58,7 @@ record length. Source:
 <https://www.tek.com/en/support/faqs/what-format-isf-file>, read on 2026-08-08.
 
 The real file above agrees with that description, which is the point of checking
-one rather than trusting the other:
+one instead of trusting the other:
 
     head -c 200 example.isf
     :WFMPRE:NR_PT 10000;:WFMPRE:BYT_NR 2;BIT_NR 16;ENCDG BINARY;BN_FMT RI;BYT_OR MSB;WFID "Ch2, DC coupling, 5.000V/div, 400.0ns/div, 10000 points, Sample mode";NR_PT 10000;PT_FMT Y;XUNIT "s";XINCR 400.00
@@ -72,7 +72,7 @@ That single line is why this format is the right skeleton. It gives
 identification a distinctive prefix to recognise; it gives the bounded cursor a
 length field to be lied to about; it gives the checked allocation helper a count
 to refuse; it gives scaling a multiplier, an offset and a zero to apply as a
-recorded transform rather than silently; and the disagreement between the two
+recorded transform and never silently; and the disagreement between the two
 length statements is a damaged-file case that writes itself.
 
 **The files are small enough to live in the repository.** The file above is
@@ -140,7 +140,7 @@ hard case rather than an easy one. It is rejected on the first criterion.
 `docs/landscape.md` records, for all three, that no real file has been shown to
 be obtainable. A first reader in any of them would stall at the corpus and the
 whole pipeline would stay unproven while somebody negotiates for files. Those
-families need files first, and that is work on the tracker rather than a reader.
+families need files first, and that is work on the tracker and not a reader.
 
 **A format with no separate data block, such as a purely tabular export.**
 Rejected because it exercises almost none of the machinery this reader exists to

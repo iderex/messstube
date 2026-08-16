@@ -2,11 +2,10 @@
 
 The internal save format a Tektronix oscilloscope writes when a channel is saved
 to a file. It is the first format this project reads, chosen in
-`docs/decisions/0013-first-format.md` to prove the pipeline rather than to cover
-a gap.
+`docs/decisions/0013-first-format.md` to prove the pipeline, not to cover a gap.
 
 This note is written before the reader, and it is documentation of the format
-rather than of any code here. Somebody writing a reader for ISF in another
+and of no code here. Somebody writing a reader for ISF in another
 language should be able to start from this page and the description beside it,
 and never open this repository's source.
 
@@ -24,7 +23,7 @@ is given. It is a statement about four files and not about the format.
 
 **Inferred** means neither of the above and somebody reasoned it out. An
 inference says what it rests on, so that the next person can disagree with the
-reasoning rather than with the conclusion.
+reasoning and not only with the conclusion.
 
 A statement with no word is a defect in this note.
 
@@ -104,7 +103,7 @@ channel, the same time base and the same length.
 A reader that stops at the first block therefore reads a real file correctly and
 silently drops half of it, and a reader that treats trailing bytes as damage
 refuses a real file. Neither behaviour is a misreading of the bytes, which is why
-this belongs in a format note rather than in a bug report.
+this belongs in a format note and not in a bug report.
 
 **There is no terminator, no length field for the file and no record count.**
 Observed: `example.isf` ends on the last sample byte of its only block, with
@@ -127,7 +126,7 @@ prefix covering both spellings of the first keyword, `:WFMPRE:` in one file and
 
 Inferred, resting on the SCPI mnemonic rule described in the next section: any
 abbreviation of `WFMPRE` accepted by the instrument begins `WFMP`, so the prefix
-holds across the spellings, and it is five bytes rather than eight for that
+holds across the spellings, and it is five bytes instead of eight for that
 reason. This is inference and not a documented guarantee.
 
 The usual extensions are `isf` and `ISF`, observed as the suffix of all four
@@ -203,7 +202,7 @@ by its position. The "Seen in" column counts files, out of four, and not records
 
 Twelve of those twenty-eight fields are named nowhere in the documentation read
 for this note, and they are the twelve carrying no long and short spelling pair
-in the first two columns. They are listed rather than dropped, because a field a
+in the first two columns. They are listed and not dropped, because a field a
 reader skips silently is a field the next person rediscovers.
 
 ## The values actually observed

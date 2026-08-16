@@ -43,7 +43,7 @@ required:
 Three of those were sharpened when the block was built, in #36, and the sharper
 wording is what the code holds. The input is the name the caller used, because
 this library opens nothing and has no path of its own to record. The content
-hash carries the algorithm beside the digest rather than leaving it to be
+hash carries the algorithm beside the digest, so nothing is left to be
 assumed. And what is recorded of the reader is its stable identifier together
 with its maturity level at the time of the conversion, which is the part that
 moves and the part somebody holding an old output needs; the version of the
@@ -78,7 +78,7 @@ it in the block makes every output differ from every other output of the same
 input, for no gain. What that costs is not abstract: with a timestamp in the
 block, no corpus test can compare a converted file to a stored one, and the
 comparison has to be softened into a comparison of the parts that do not move.
-The determinism this buys is asserted rather than described, in
+The determinism this buys is asserted and not merely described, in
 `two_reads_of_one_input_produce_the_same_provenance` in
 `crates/messstube-core/tests/provenance.rs`.
 
@@ -97,7 +97,7 @@ step longer than in a library that returns floats. Every reader has to know
 which of its numbers are codes and which are already physical, and has to say
 so. Where an instrument writes physical values directly, the transform is the
 identity and the structure carries a field that says nothing, which is the cost
-of one shape across all families rather than a shape per family.
+of one shape across all families instead of a shape per family.
 
 The omissions cost the operator who wanted them. Somebody who needs to know when
 a conversion ran has to record it themselves, beside the output, and somebody
@@ -126,8 +126,8 @@ A conversion timestamp in the block, which is the strongest of these and is what
 almost every converter writes. It answers a real question, which is whether an
 output predates a repair to the reader that produced it. It was rejected because
 the maturity level and the library version in the block answer that question
-better and without the cost: they say what the reader was, rather than leaving
-somebody to work out what it was on a date. What the timestamp adds on top of
+better and without the cost: they say what the reader was, and leave nobody
+to work out what it was on a date. What the timestamp adds on top of
 that is the afternoon, which nobody needs and which every comparison of two
 outputs then has to be taught to ignore.
 

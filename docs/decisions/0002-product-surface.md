@@ -15,13 +15,13 @@ A Python binding is designed for and is not shipped in the first release.
 
 Whether the absence of a graphical surface is a permanent boundary or the
 current one is entry 5 of #1, which belongs to the maintainer. If it is settled
-the other way, that answer arrives as a record superseding this one rather than
+the other way, that answer arrives as a record superseding this one, never
 as a change to this one.
 
 Designed for a binding means three constraints on the public interface, and they
-hold from the first reader rather than from the day a binding is attempted:
+hold from the first reader, and not from the day a binding is attempted:
 
-1. It returns plain owned data rather than borrowed views.
+1. It returns plain owned data and never borrowed views.
 2. It keeps lifetimes out of its signatures.
 3. Its error values are describable without Rust vocabulary.
 
@@ -33,7 +33,7 @@ today only by opening a graphical program, which is why they are unreadable in a
 pipeline, on a server, and in ten years. A library that a command-line tool
 happens to use is the shape that stays useful in all three places.
 
-One tool rather than several keeps the operator surface small enough to document
+One tool instead of several keeps the operator surface small enough to document
 honestly. A surface nobody can document completely is one whose gaps are
 discovered by the operator instead of by the project.
 

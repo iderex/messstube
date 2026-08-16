@@ -1,7 +1,7 @@
 # Release acceptance
 
-What the first release has to do, written as a sequence somebody runs rather
-than as a judgement that it is ready. A release goes out when this list passes
+What the first release has to do, written as a sequence somebody runs and not
+as a judgement that it is ready. A release goes out when this list passes
 on every supported platform, and not when the milestone board looks empty.
 
 The list is run on a machine that has never had this project on it, against the
@@ -59,7 +59,7 @@ tabs. Exit code 0.
 The level is the third field and it is the part of this step that matters. What
 each level claims is `docs/decisions/0009-reader-maturity.md`. A reader at
 `sketched` has been verified against no file from a physical instrument, and the
-release has to be read with that in front of it rather than found later.
+release has to be read with that in front of it, where nobody finds it later.
 
 ### 3. Identify the three files
 
@@ -75,7 +75,7 @@ the most serious outcome among them:
 Exit code 3, from the unrecognised file.
 
 The damaged file answers here exactly as the whole one does, and that is
-deliberate rather than a defect. `identify` reads no more than the
+deliberate, not a defect. `identify` reads no more than the
 identification prefix, so it can be pointed at a directory off an old machine
 without reading every byte of it, and damage past the prefix is not visible to
 it. The two are separated at step 4. Run singly, `whole.isf` and
@@ -122,7 +122,7 @@ Exit code 0, and the channels, units, axes and instrument identification:
 
 An absent instrument identification is an answer and not a failure. This format
 carries no field naming a manufacturer, a model or a serial number, and the
-reader says so rather than filling one in.
+reader says so instead of filling one in.
 
 Then the damaged file:
 
@@ -166,8 +166,7 @@ with its unit, then one row per sample, tab separated:
     8e-7	-5.041875
     1.2e-6	0.11812500000000001
 
-A channel the file gave no name to leaves the name empty rather than inventing
-one, which is why the second column header begins with a space.
+A channel the file gave no name to leaves the name empty and invents nothing, which is why the second column header begins with a space.
 
 ### 7. Find the provenance in the metadata document
 
@@ -201,7 +200,7 @@ machine is the environment this project exists for, and a tool that quietly
 needs a lookup, an update check or a licence call fails there and nowhere else.
 
 How the network is taken away belongs to whoever runs the list, and the honest
-instruction is a machine that has no route rather than a flag. Disabling an
+instruction is a machine that has no route, and not a flag. Disabling an
 interface, adding a firewall rule or entering a network namespace all need
 privilege on at least one of the supported platforms, and a step that needs an
 administrator is a step that gets skipped.
@@ -211,16 +210,16 @@ step checks, and it is #62 and #61.
 
 ## What is not in this release
 
-Stated here rather than left to be discovered, and each line says what would
-change it.
+Stated here, where a reader meets it without looking, and each line says what
+would change it.
 
 No graphical surface. `docs/decisions/0002-product-surface.md` rejects one, and
-this is a permanent boundary rather than a deferral unless entry 5 of #1 moves
+this is a permanent boundary and not a deferral unless entry 5 of #1 moves
 it.
 
 No language binding. The same record defers a Python binding and prices it, and
-the interface constraints that keep it an addition rather than a redesign are
-held now.
+the interface constraints that keep it an addition, and stop it becoming a
+redesign, are held now.
 
 No interchange output. Whether one ships is a component decision in
 `docs/decisions/0008-output-and-interchange.md`; the two files step 5 writes are
@@ -290,8 +289,8 @@ published one, and a released artifact could differ from it in ways this run
 cannot see.
 
 Step 8 was not performed. Taking the network away on the machine this run
-happened on requires an administrator prompt, and that was refused rather than
-worked around. Nothing about the no-network behaviour of this build is claimed
+happened on requires an administrator prompt, and that was refused; no workaround was
+attempted. Nothing about the no-network behaviour of this build is claimed
 here.
 
 The list has been run on one platform of three. Nothing was run on Linux or on

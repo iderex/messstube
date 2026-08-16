@@ -26,7 +26,7 @@ refusal, not a discussion.
 ### Provenance
 
 It is known which instrument produced the file and who provided it. Both, and
-recorded in the index rather than in somebody's memory.
+recorded in the index, where somebody's memory cannot be the authority.
 
 The reason is what happens when the reader and the file disagree. Without
 provenance there is no way to find out which of the two is wrong: the file might
@@ -99,7 +99,7 @@ acquisition where the format allows one, or is held outside the repository.
 
 A corpus nobody can clone is a corpus nobody runs, and a suite nobody runs is a
 suite that goes red in silence. Trimming means a shorter acquisition of the same
-kind rather than a truncated file: a truncated file is a damaged-file case, which
+kind, and never a truncated file: a truncated file is a damaged-file case, which
 is a different thing with a different job, and mixing the two produces a corpus
 where a genuine truncation bug looks like the corpus working as intended.
 
@@ -149,7 +149,7 @@ in `CORPUS_ROOT` and `FILES_DIRECTORY` in
 `crates/messstube-core/tests/corpus.rs`. Moving the corpus is a change to those
 two lines.
 
-The digest is what makes that safe rather than merely tidy. A file is identified
+The digest is what makes that safe, and not merely tidy. A file is identified
 by what it contains and not by where it was found, so a file that has been moved
 is the same file and a file that has been replaced is not, wherever either one
 sits.
@@ -167,7 +167,7 @@ entry writes `location: here`. A file that does not ship here is described here
 and fetched from somewhere else, and its entry writes the location it is fetched
 from. Both tiers carry every field, including the digest, and the digest is what
 makes the second one safe: the file is verified on arrival, and a mismatch is a
-hard failure rather than a warning.
+hard failure and not a warning.
 
 Fetching is a command the operator runs, and it never happens during a test run.
 `docs/decisions/0011-headless-testing.md` forbids a test that reaches the
@@ -183,7 +183,7 @@ letting it stay, and
     cargo corpus
 
 which verifies what is already on the machine and reaches nothing. Fetching is
-off by default, which is why it is a word somebody types rather than the
+off by default, which is why it is a word somebody types and not the
 behaviour of a bare invocation.
 
 The tier decides one thing and nothing else: whether a missing file is a
@@ -193,7 +193,7 @@ exactly like one that ships here.
 ### The gate runs the internal tier only
 
 That is a real limit on what a green gate means, and it is recorded as one in
-`docs/gate-parity.md` rather than left to be discovered. The gate has no
+`docs/gate-parity.md`, where a reader meets it without having to discover it. The gate has no
 external files, so every external entry is a corpus test that did not run.
 
 What keeps it honest is that the count and the identifiers are printed on every
@@ -242,7 +242,7 @@ The list is closed in both directions. A missing field is refused and so is a
 field name that is not on it, so that `term:` written for `terms:` is a refusal
 rather than a value that silently went nowhere.
 
-Four fields carry a fixed shape rather than free text, and each is refused when
+Four fields carry a fixed shape and not free text, and each is refused when
 it does not have it. `location` says `here` or a location with a scheme and
 something after it, because it is the field the two tiers are told apart by and
 an entry whose tier nobody can read would be placed in one of them by accident.
@@ -255,7 +255,7 @@ spelling somebody invented is a file the ledger counts as unverified without
 saying so.
 
 `file` is refused unless it is a relative path that stays inside the corpus. A
-leading slash, a backslash, a drive letter and `..` are all refused rather than
+leading slash, a backslash, a drive letter and `..` are all refused, never
 translated, because an index written on one machine is read on another and the
 check follows whatever the entry names.
 
@@ -318,4 +318,4 @@ everything, and a check that refuses everything passes its own test and blocks
 every corpus there will ever be.
 
 Those proofs run on every run of the corpus target, before it looks at the index
-at all, rather than when somebody remembers to run them.
+at all, and never only when somebody remembers to run them.
