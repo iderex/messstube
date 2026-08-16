@@ -69,9 +69,9 @@ over a serial link, a digitiser whose saved file differs from what its front
 panel exports, a rig whose firmware writes a field the documentation does not
 mention. None of that can be a test in the default suite, because
 `docs/decisions/0011-headless-testing.md` keeps an attached instrument out of it,
-and that decision is a floor rather than a preference.
+and that decision is a floor, not a preference.
 
-So it moves rather than being abandoned. A harness is a crate of its own under
+So it moves, and is not abandoned. A harness is a crate of its own under
 `crates/`, and its name states the hardware it requires. The first one is
 `harness-needs-serial-port`, and it is run by naming it:
 
@@ -85,10 +85,10 @@ such name.
 The gate compiles it, lints it and runs the unit tests over its reporting, and it
 never runs the harness itself. Those are different things. Compiling it is what
 stops it rotting into a target that no longer builds; running it is what would
-make a merge wait on a cable. The exclusion is checked rather than remembered:
+make a merge wait on a cable. The exclusion is checked, and never merely remembered:
 `no_route_in_this_tree_runs_the_harness` reads the gate verb and every workflow
 file and refuses if either names the binary, so adding it to a gate or a schedule
-reds the suite rather than quietly changing what a green check means.
+reds the suite instead of quietly changing what a green check means.
 
 Invoked without what it needs, it says which harness it is, what it needed, that
 it did not run, and what having it would have covered, and it exits non-zero. A

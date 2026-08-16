@@ -8,7 +8,7 @@ What a reader may do with bytes it was handed by somebody who is not this
 project. The budget is fixed once and centrally, because a rule argued per
 reader is a rule the twelfth reader does not have.
 
-The threat is ordinary rather than exotic. A length field claiming four billion
+The threat is ordinary, and nothing about it is exotic. A length field claiming four billion
 samples. A nesting depth chosen to exhaust the stack. An offset pointing back at
 itself. A text field with no terminator. None of these needs an attacker; a
 truncated copy off a failing instrument produces most of them.
@@ -18,8 +18,7 @@ truncated copy off a failing instrument produces most of them.
 Nothing below is held by a mechanism today, because there is no code in this
 tree yet. Each part names the issue that builds its mechanism, so that a reader
 can see what is a rule and what is currently a sentence. Where the mechanism is
-not yet built, the sentence is an intention and this record says so rather than
-implying otherwise.
+not yet built, the sentence is an intention and this record says so plainly.
 
 ### One. No allocation is sized from a number read out of the file
 
@@ -40,9 +39,9 @@ in this field.
 
 ### Two. No unsafe code in reader crates
 
-Enforced at the crate level rather than by review, because review is where this
+Enforced at the crate level and never by review, because review is where this
 is missed. The mechanism is `#![forbid(unsafe_code)]` at the root of every
-reader crate, which makes it a compile error rather than a finding, and which
+reader crate, which makes it a compile error and not a finding, and which
 cannot be relaxed further down the file by an attribute somebody adds in a
 hurry. The lint configuration in #15 carries warnings as errors, so a weaker
 spelling does not survive either.
@@ -106,7 +105,7 @@ what keeps the provenance block byte-identical across runs, which #62 names and
 which #63 depends on when it reports what personal data an instrument file
 actually contained.
 
-The first three parts are safety and availability rather than data protection.
+The first three parts are safety and availability, and not data protection.
 They are not what the legal statement rests on, and this record says so rather
 than letting five parts share credit for two.
 
@@ -139,7 +138,7 @@ total stayed under a number.
 
 Runtime-configurable bounds, rejected above.
 
-Auditing unsafe code rather than forbidding it, rejected because the audit is
+Auditing unsafe code instead of forbidding it, rejected because the audit is
 review, and this decision exists because review is where these are missed.
 
 Relying on fuzzing alone, rejected because fuzzing finds what it reaches. It is

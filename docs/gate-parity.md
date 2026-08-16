@@ -4,7 +4,7 @@ Measured on 2026-08-07. The reference gate is the merge gate on the public
 repository `Flowfin/jellyfin-plugin-sso`, measured at its `main` commit
 `c1c06a395399c87facfd10825ada4c08bd506926`. Naming a target is what makes parity
 a thing that can be measured instead of asserted, and the reference gate moves,
-so this page carries the date and the commands rather than only the answer.
+so this page carries the date and the commands, and not only the answer.
 
 ## The measurement
 
@@ -45,10 +45,10 @@ of them is handed arbitrary bytes by strangers as its entire purpose.
 | --- | --- | --- | --- |
 | `build` | Adapted | The reference builds and tests a .NET plugin; here the same intent is one local verb whose build and test leg appears as its own check. | #17 |
 | `ABI floor build` | Adapted | There is no plugin host to floor against, but the same asymmetry exists one level down, so the floor becomes a declared minimum toolchain that the gate compiles against. It compiles and does not run the suite, because the failure being guarded against is a compile failure on somebody else's machine, and a test failure on the floor toolchain is the one the `build` row's check already reports; running the whole suite a second time buys that difference and nothing else. | #25 |
-| `Package (JPRM) / Build package` | Adapted | The packaging tool is specific to the reference's plugin format; the intent, that a releasable artifact is built on every pull request rather than only at release, transfers. | #26 |
-| `Package (JPRM) / Generate SBOM` | Adapted | Same packaging tool, same reason. A bill of materials is generated from this board's own dependency graph instead. Merged into the row above rather than kept as a second check; the reason is below the table. | #26 |
+| `Package (JPRM) / Build package` | Adapted | The packaging tool is specific to the reference's plugin format; the intent, that a releasable artifact is built on every pull request and not only at release, transfers. | #26 |
+| `Package (JPRM) / Generate SBOM` | Adapted | Same packaging tool, same reason. A bill of materials is generated from this board's own dependency graph instead. Merged into the row above instead of kept as a second check; the reason is below the table. | #26 |
 | `CodeQL` | Adopted | The measurement that decided this is below the table, under "The analyser was measured before it was chosen". | #22 |
-| `Analyze (csharp)` | Declined | It is the language-specific check run of the reference's analysis job, and there is no C# in this tree. The static analysis intent is carried by the row above rather than lost. | |
+| `Analyze (csharp)` | Declined | It is the language-specific check run of the reference's analysis job, and there is no C# in this tree. The static analysis intent is carried by the row above and is not lost. | |
 | `DCO sign-off` | Adopted | | already in the tree; #19 supplied the two files its failure message points at |
 | `Deterministic PR-hygiene checks` | Adapted | The tiering transfers; the individual checks reason about the reference's own conventions, so the set is rebuilt against this board's. | #24 |
 | `Enforce greppable invariants` | Adopted | | #23 |
@@ -61,7 +61,7 @@ Four of the thirteen are already in this tree and pass today. What they lack is
 not the check but the ruleset entry that makes any of them stand between a change
 and the mainline, which is #30.
 
-Two of the rows name issues in milestone 2 rather than in this milestone, `build`
+Two of the rows name issues in milestone 2 instead of this one, `build`
 and `prettier`, because the local gate verb and the formatting configuration are
 where those two are actually delivered. Recording the real issue is worth more
 than keeping every row inside one milestone.
@@ -88,10 +88,10 @@ point of building on every pull request, which is to see which platform broke.
 
 The bill of materials is generated on the Linux leg only. It is generated with
 `--target all` from a lockfile committed to this repository, so it describes the
-graph rather than the machine, and the other two legs would produce documents
+graph and not the machine, and the other two legs would produce documents
 differing from it only in a timestamp and a serial number. That is a deviation
-from "both are one check" in the strictest reading and it is recorded here rather
-than left for a reader to discover from the artifact list.
+from "both are one check" in the strictest reading, and it is recorded here so no
+reader has to discover it from the artifact list.
 
 That operating-system set is derived rather than decided: it is the set
 `docs/decisions/0002-product-surface.md` already counts when it prices a deferred
@@ -116,8 +116,8 @@ GitHub itself offers the analyser for this language on this repository:
     gh api repos/iderex/messstube/code-scanning/default-setup --jq '{state, languages}'
     {"languages":["actions","rust"],"state":"not-configured"}
 
-The check runs, and the analyser reports its own version rather than it being
-assumed from the pin:
+The check runs, and the analyser reports its own version, which the pin is not
+asked to stand in for:
 
     gh run view 31265396447 --log | grep 'CodeQL version'
     'tools: linked' was requested, so using CodeQL version 2.26.1, the version shipped with the Action.
@@ -171,8 +171,8 @@ reader and no parsing code in this tree yet, so there is nothing here for a
 security query to reach. A zero from a run over an empty surface must not be
 quoted as a clean bill of health for code that does not exist; the rule count is
 the number this verdict was read off, and the result count becomes interesting
-the day the first reader lands. That is also why the check is here now rather
-than later: a static analyser added after the code it judges begins its life with
+the day the first reader lands. That is also why the check is here now and not
+later: a static analyser added after the code it judges begins its life with
 a backlog nobody triages.
 
 The workflow files are not analysed here, although CodeQL has an `actions`
@@ -180,18 +180,18 @@ language and the query above lists it. `Audit workflows (zizmor)` already reads
 every workflow in this tree at its lowest severity floor and fails on what it
 finds, so a second analyser over the same subject would add a second name to the
 required set and no information. That is a deviation from analysing everything
-the analyser could reach, and it is recorded here rather than left for a reader
-to infer from a language list.
+the analyser could reach, and it is recorded here so no reader has to infer it
+from a language list.
 
 ## What this board adds
 
 | What | Verdict | Reason | Delivered by |
 | --- | --- | --- | --- |
-| Fuzzing required for a merge rather than scheduled | Added | The reference's input is mostly structured protocol messages; this project exists to be handed arbitrary bytes by people it has never met, and fuzzing is the technique that finds the bugs a binary parser actually has. | #27 |
-| A coverage bar on the parsing surface | Added | The parsing surface is where a missed branch is a reachable bug rather than an untested convenience, so the bar is placed there rather than across the tree. | #28 |
-| Weekly mutation testing, reported and never enforced | Adopted | Adopted from the reference as a practice rather than as a required context: it is not in the reference's required set above and is not proposed for this board's either, and the non-gating property is adopted with its reasoning. | #29 |
+| Fuzzing required for a merge, not scheduled | Added | The reference's input is mostly structured protocol messages; this project exists to be handed arbitrary bytes by people it has never met, and fuzzing is the technique that finds the bugs a binary parser actually has. | #27 |
+| A coverage bar on the parsing surface | Added | The parsing surface is where a missed branch is a reachable bug rather than an untested convenience, so the bar is placed there and not across the tree. | #28 |
+| Weekly mutation testing, reported and never enforced | Adopted | Adopted from the reference as a practice and not as a required context: it is not in the reference's required set above and is not proposed for this board's either, and the non-gating property is adopted with its reasoning. | #29 |
 
-## One discrepancy on the reference, recorded rather than resolved
+## One discrepancy on the reference, recorded and not resolved
 
 #21 raises a disagreement on the reference between its pull-request hygiene
 workflow header, which was reported as declaring itself advisory and not wired
@@ -231,7 +231,7 @@ run.
 
 | What is outside the gate | Why it is outside | Where it is covered instead |
 | --- | --- | --- |
-| The external tier of the verification corpus: every corpus file that is described in the index and does not ship in this repository | Those files are not redistributable, which is why they are described rather than shipped, and `docs/decisions/0011-headless-testing.md` forbids a test that reaches the network, so nothing in the gate may fetch them. The gate therefore runs the internal tier only, and a green gate says nothing about a reader against a file it never saw. | `cargo corpus fetch` obtains them on the operator's machine and verifies each one against its digest before it is allowed to stay. What keeps the gap from being a quiet one is that the corpus target prints the count and the identifiers of every entry it could not reach, on every run. #41 |
+| The external tier of the verification corpus: every corpus file that is described in the index and does not ship in this repository | Those files are not redistributable, which is why they are described in the index and not shipped, and `docs/decisions/0011-headless-testing.md` forbids a test that reaches the network, so nothing in the gate may fetch them. The gate therefore runs the internal tier only, and a green gate says nothing about a reader against a file it never saw. | `cargo corpus fetch` obtains them on the operator's machine and verifies each one against its digest before it is allowed to stay. What keeps the gap from being a quiet one is that the corpus target prints the count and the identifiers of every entry it could not reach, on every run. #41 |
 | Hardware-attached behaviour: anything that needs an instrument, a serial port or any other device | `docs/decisions/0011-headless-testing.md` keeps an attached instrument out of the default suite, and a gate that can be blocked by a cable is a gate that gets bypassed. No merge waits on an instrument. | The hardware harness, `crates/harness-needs-serial-port`, run by hand with a rig present. The gate compiles and lints it and never runs it, and a test in it refuses if the gate verb or any workflow ever names it. #43 |
 
 That last row is a real gap in coverage and it is the price
@@ -242,6 +242,6 @@ uncovered every time it cannot run, so a skip is never readable as a pass.
 ## Keeping this page true
 
 The reference gate moves, so re-run the two commands under "The measurement"
-rather than trusting the lists above. This page carries the date it was measured
+instead of trusting the lists above. This page carries the date it was measured
 for that reason. The rows change when a re-measurement moves them, and the issues
 named in the last column are where each row stops being a plan.

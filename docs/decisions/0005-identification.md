@@ -6,7 +6,7 @@ Decided 2026-08-08. Raised in #6.
 
 Given a file and a set of readers, which reader gets it. Every route into this
 library goes through that question, so the answer is fixed before any reader
-exists rather than settling into whatever the first one happened to do.
+exists, and never settles into whatever the first one happened to do.
 
 ## The decision
 
@@ -20,7 +20,7 @@ A reader whose predicate does not claim the bytes is not selected because the
 name suggested it, and a reader whose predicate does claim the bytes is not
 skipped because the name did not.
 
-Both failure directions are refusals rather than guesses.
+Both failure directions are refusals, and neither is a guess.
 
 If more than one reader claims the file, identification fails and the failure
 names every reader that claimed it. It does not pick one.
@@ -33,7 +33,7 @@ back to trying readers in turn to see which one does not error.
 A recognition predicate may read at most the first 4096 bytes of the file, and
 the file's total length. It may read fewer. It may not read more, and it may not
 seek beyond that window, which is what makes the bound a property of the
-interface rather than a convention each reader keeps or forgets.
+interface and not a convention each reader keeps or forgets.
 
 4096 bytes, because it is large enough for the header of every family in scope
 as those families are understood today, and because it is one page on the
@@ -42,7 +42,7 @@ however many readers are asked. A predicate that genuinely needs more bytes than
 that to tell one format from another is describing an ambiguity between the two
 formats, and the answer to that is the refusal above rather than a deeper look.
 
-The number is here rather than in each reader so that there is one place to
+The number is here and not in each reader, so that there is one place to
 argue with. Raising it is a change to this record with a reason, not a constant
 somebody edits.
 

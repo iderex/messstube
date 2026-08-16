@@ -26,7 +26,7 @@ The format is described and a reader exists. It has been verified against no
 real file from a real instrument.
 
 Nothing may depend on it. The tool warns when it is used, on the read itself
-rather than only in the documentation, because the person who needs the warning
+and not only in the documentation, because the person who needs the warning
 is the one who did not go looking for a table.
 
 ### Verified
@@ -58,7 +58,7 @@ somebody has output that came from it and needs to know what happened.
 Sketched to Verified: at least one real file from a physical instrument, in the
 corpus, read by the reader, with the instrument identified and the file count
 recorded. What a file must satisfy before it joins the corpus is #40, and it is
-the gate on this transition rather than a separate judgement.
+the gate on this transition, and not a separate judgement.
 
 Verified to Corroborated: expected values obtained without using this repository,
 for the quantities the reader produces, agreeing with what the reader produced.
@@ -97,13 +97,13 @@ This is the part that keeps the scheme honest. The level is a value in the
 reader, next to the code it describes. It appears in the provenance block of
 every read, from #36, so a converted file carries the claim that stood behind it
 at the moment it was read. The verification ledger in #45 counts levels off the
-corpus index rather than off any document.
+corpus index and off no document.
 
 A claim in a table that no artefact carries is a claim that drifts, and it drifts
 in the flattering direction: documentation gets upgraded when somebody is
 optimistic and does not get downgraded when a file is withdrawn. Putting the
 level in the reader and in the output means the table is generated from the
-claim rather than being the claim.
+claim and is never itself the claim.
 
 ## What it costs
 
@@ -128,7 +128,7 @@ parse that works and numbers that are right, which is the distinction that
 matters most here.
 
 A numeric or starred score, rejected because the number would be assigned against
-no shared scale and would be argued about rather than earned.
+no shared scale and would be argued about instead of earned.
 
 A percentage of format coverage as the maturity axis, rejected because it
 measures how much of the layout is understood rather than whether the output is

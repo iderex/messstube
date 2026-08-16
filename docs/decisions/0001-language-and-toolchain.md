@@ -24,7 +24,7 @@ the machine this record was written on:
     $ rustup run 1.97.1 rustc --version
     rustc 1.97.1 (8bab26f4f 2026-07-14)
 
-The file names a version rather than the word `stable`, because `stable` is a
+The file names a version and never the word `stable`, because `stable` is a
 moving target and a moving target cannot be the thing a reproduction agrees on.
 Moving the pin is a change with its own issue and its own reason, which is the
 point of pinning it.
@@ -38,19 +38,19 @@ floor beneath it.
 A reader is fed bytes nobody in this project produced. In a memory-unsafe
 language a malformed header is a class of defect that no quantity of test
 coverage removes, because the tests only cover the inputs somebody thought of.
-Rust turns an out-of-bounds read into a refusal the language makes, rather than
+Rust turns an out-of-bounds read into a refusal the language makes, and not into
 a finding a reviewer has to notice.
 
 Fuzzing is the one technique that is unambiguously good at parsers, and it is
 first class here through cargo-fuzz and libFuzzer. #27 is where fuzzing becomes
-a condition of merging rather than something run occasionally, and that issue is
+a condition of merging and not something run occasionally, and that issue is
 only cheap to hold because the language already carries the tooling.
 
 The output is a single binary with no runtime to install. The operator this
 project is for sits at an offline measurement machine and cannot be asked to
-install an interpreter, which is a practical constraint rather than a taste.
+install an interpreter, which is a practical constraint and not a taste.
 
-Formatting, linting and coverage come from one toolchain rather than from four
+Formatting, linting and coverage come from one toolchain instead of four
 separately versioned tools, which is what makes #15 and #28 small pieces of work
 instead of an integration project.
 

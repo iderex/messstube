@@ -3,8 +3,8 @@
 First checked on 2026-08-07. Sections carry their own check date where a survey
 has moved it, and that per-section date is the one to trust. Every claim below
 carries the command or the URL behind it. Coverage moves, and a page that stops
-being checked is worse than no page, so the check date is part of the content
-rather than decoration.
+being checked is worse than no page, so the check date is content and not
+decoration.
 
 ## Two kinds of gap
 
@@ -49,8 +49,8 @@ with. Its README states this in its own words:
 Source: <https://github.com/scottprahl/RigolWFM/blob/main/README.rst>, read on
 2026-08-07.
 
-It is a library rather than an application, so it is the right shape, and it is
-under a permissive license, so a downstream project can take it:
+It is a library, so a pipeline can call it, and it is under a permissive
+license, so a downstream project can take it:
 
     gh api repos/scottprahl/RigolWFM --jq '{license: .license.spdx_id, pushed_at, archived}'
     {"archived":false,"license":"BSD-3-Clause","pushed_at":"2026-04-06T00:30:14Z"}
@@ -61,8 +61,8 @@ under a permissive license, so a downstream project can take it:
 What this means for this board. The README's opening framing names oscilloscope
 raw formats as part of the remainder, and for these seven vendors that is not
 accurate. Whether any gap is left here is a question about specific models and
-file revisions rather than about vendors, and it is what the oscilloscope survey
-below settles.
+file revisions, not about vendors, and it is what the oscilloscope survey below
+settles.
 
 ### Survey, 2026-08-08
 
@@ -70,10 +70,11 @@ The five survey questions from #56. The recommendation is at the end and it is t
 drop the remainder of this family, so the answers are worth reading for the one
 thing they found that is not covered.
 
-**Which instruments and software versions are actually in use.** Read off the
-existing library's own declared coverage rather than from a market claim, since
-that is the list a duplicate would have to beat. RigolWFM's README names Rigol
-DS1000B/C/D/E, DS1000Z, DS2000, DS4000, DS6000, MSO5000, MSO7000/8000 and
+#### Which instruments and software versions are actually in use
+
+Read off the existing library's own declared coverage instead of a market claim,
+since that is the list a duplicate would have to beat. RigolWFM's README names
+Rigol DS1000B/C/D/E, DS1000Z, DS2000, DS4000, DS6000, MSO5000, MSO7000/8000 and
 DHO800/DHO1000; Tektronix WFM and ISF from the modern DPO and DSA families;
 LeCroy `.trc` from the WaveRunner and WaveSurfer families; Agilent and Keysight
 `.bin` from InfiniiVision and Infiniium; Rohde & Schwarz RTP, RTO and RTM;
@@ -85,9 +86,11 @@ Source: <https://github.com/scottprahl/RigolWFM/blob/main/README.rst>, read on
 Which firmware generations are in the field, as opposed to which the library
 claims, was not established and cannot be from a repository.
 
-**What the file looks like.** Every format the library reads is described
-declaratively rather than in procedural parsing code, which is the property that
-makes its coverage portable to another language by construction:
+#### What the file looks like
+
+Every format the library reads is described declaratively, not in procedural
+parsing code, which is the property that makes its coverage portable to another
+language by construction:
 
     gh api "search/code?q=repo:scottprahl/RigolWFM+extension:ksy" --jq '.total_count'
     32
@@ -96,19 +99,23 @@ Thirty-two Kaitai Struct descriptions. That number is the reason a competing
 reader here would be duplication in the strong sense: the format knowledge is not
 merely open, it is already in a form another language can generate a parser from.
 
-**Whether an open reader exists anywhere.** It does, it is a library rather than
-an application, it is permissively licensed, and it is maintained:
+#### Whether an open reader exists anywhere
+
+It does. It is a library, so a pipeline can call it, it is permissively
+licensed, and it is maintained:
 
     gh api repos/scottprahl/RigolWFM --jq '{license: .license.spdx_id, pushed_at, archived}'
     {"archived":false,"license":"BSD-3-Clause","pushed_at":"2026-04-06T00:30:14Z"}
 
 Run on 2026-08-08. There is no gap of either kind for the vendors above.
 
-**Whether the existing coverage is verified against real files.** This is the
-question #56 says cuts both ways, and it is where the survey found something.
+#### Whether the existing coverage is verified against real files
+
+This is the question #56 says cuts both ways, and it is where the survey found
+something.
 
 It is verified against real files for most of the library, and those files are in
-the repository rather than described. Counted on 2026-08-08:
+the repository, not merely described. Counted on 2026-08-08:
 
     for d in bin rs trc wfm; do gh api "repos/scottprahl/RigolWFM/contents/tests/files/$d" --jq '[.[]] | length'; done
     26
@@ -140,10 +147,11 @@ distinction this board is built on. Verifying it against real files is a
 contribution, and contributing that verification upstream is worth more than a
 competing reader.
 
-**What a measurement from this family is, and what it requires of the measurement
-type.** A voltage record sampled uniformly on a time axis, with the stored values
-being integer codes and the physical values derived from a multiplier, an offset
-and a zero. Measured on a real file, in the ISF preamble:
+#### What a measurement from this family is, and what it requires of the measurement type
+
+A voltage record sampled uniformly on a time axis, with the stored values being
+integer codes and the physical values derived from a multiplier, an offset and a
+zero. Measured on a real file, in the ISF preamble:
 
     :WFMPRE:NR_PT 10000;:WFMPRE:BYT_NR 2;BIT_NR 16;ENCDG BINARY;BN_FMT RI;BYT_OR MSB;WFID "Ch2, DC coupling, 5.000V/div, 400.0ns/div, 10000 points, Sample mode";NR_PT 10000;PT_FMT Y;XUNIT "s";XINCR 400.00...
 
@@ -153,26 +161,29 @@ type does not already hold. It is the only one of the four families surveyed so
 far of which that is true, which is a reason to write the first reader here and
 not a reason to write more of them.
 
-**Recommendation: drop the remainder of this family.** Keep exactly one reader
-and take no more. The vendors are covered, the coverage is the right shape, it is
-permissively licensed, it is maintained, and its format knowledge is already
-declarative. A second reader here would be a fourth implementation of a
-well-covered format, which is the cost the README's framing has to stop paying.
+#### Recommendation: drop the remainder of this family
 
-The one exception is the finding above rather than a gap: Tektronix ISF and WFM
-are covered by descriptions that no instrument-produced file has been compared
-against. The useful work there is verification, not reimplementation.
+Keep exactly one reader and take no more. The vendors are covered, the coverage
+is the right shape, it is permissively licensed, it is maintained, and its format
+knowledge is already declarative. A second reader here would be a fourth
+implementation of a well-covered format, which is the cost the README's framing
+has to stop paying.
 
-**And the first reader is in this family, deliberately.** `docs/decisions/0013-first-format.md`
-chooses Tektronix ISF as the first format, and this survey recommends dropping
-the rest of the family. Those two facts sit next to each other rather than one of
-them being hidden. The first reader is a walking
-skeleton, chosen to drive identification, bounded reads, scaling, an error model,
-a corpus entry, a fuzz target and an operator command all the way through the
-pipeline, and it is chosen for a format where a real file can be had today
-without borrowing an instrument. It is not chosen because the niche needs it. The
+The one exception is the finding above, and it is not a gap: Tektronix ISF and
+WFM are covered by descriptions that no instrument-produced file has been
+compared against. The useful work there is verification, not reimplementation.
+
+#### And the first reader is in this family, deliberately
+
+`docs/decisions/0013-first-format.md` chooses Tektronix ISF as the first format,
+and this survey recommends dropping the rest of the family. Those two facts sit
+next to each other, with neither hidden. The first reader is a walking skeleton,
+chosen to drive identification, bounded reads, scaling, an error model, a corpus
+entry, a fuzz target and an operator command all the way through the pipeline,
+and it is chosen for a format where a real file can be had today without
+borrowing an instrument. It is not chosen because the niche needs it. The
 families this board exists for are the other three, and what they need first is
-files rather than code.
+files, not code.
 
 ## Profilometers and surface metrology
 
@@ -206,42 +217,48 @@ what makes these files unreadable in a pipeline.
 The five survey questions from #54. This is the family where #54 expected the
 answer to be uncomfortable, and it is.
 
-**Which instruments and software versions are actually in use.** Taken from the
-importing program's own format table rather than from a market claim, for the
-same reason as the oscilloscope survey: that table is the list a duplicate would
-have to beat. Gwyddion's supported-format table covers the common optical and
-stylus families, and the two Bruker Dektak entries are `dektakvca` version 0.3,
-"Imports Dektak OPDx data files.", and `dektakxml` version 0.2, "Imports Dektak
-XML data files." Sources: <https://gwyddion.net/module-list-nocss.en.php> and
+#### Which instruments and software versions are actually in use
+
+Taken from the importing program's own format table instead of a market claim,
+for the same reason as the oscilloscope survey: that table is the list a
+duplicate would have to beat. Gwyddion's supported-format table covers the common
+optical and stylus families, and the two Bruker Dektak entries are `dektakvca`
+version 0.3, "Imports Dektak OPDx data files.", and `dektakxml` version 0.2,
+"Imports Dektak XML data files." Sources:
+<https://gwyddion.net/module-list-nocss.en.php> and
 <https://gwyddion.net/documentation/user-guide-en/file-formats.html>, read on
 2026-08-07 and unchanged on 2026-08-08.
 
 Which firmware generations are in the field was not established, and a repository
 cannot answer it.
 
-**What the file looks like.** For Dektak OPDx it is a tagged item store rather
-than a header and a block: the importer walks a hash of named items such as
-`/1D_Data/Raw/Array`, `/1D_Data/Raw/DataScale` and `/2D_Data/`, each carrying a
-type tag. Read from the module source on 2026-08-08, fetched with:
+#### What the file looks like
+
+For Dektak OPDx it is a tagged item store and not a header followed by a block:
+the importer walks a hash of named items such as `/1D_Data/Raw/Array`,
+`/1D_Data/Raw/DataScale` and `/2D_Data/`, each carrying a type tag. Read from the
+module source on 2026-08-08, fetched with:
 
     curl -sSL "https://sourceforge.net/p/gwyddion/code/HEAD/tree/trunk/gwyddion/modules/file/dektakvca.c?format=raw"
 
 That shape matters to this board beyond this family. A format whose structure is
-a tag store rather than a fixed layout is the case that tests whether a bounded
+a tag store, with no fixed layout, is the case that tests whether a bounded
 cursor and a depth guard are enough, and it is a candidate for the third reader
 in #58 for exactly that reason.
 
-**Whether an open reader exists anywhere.** It does, and its shape is the whole
-problem. Gwyddion is under the GNU General Public License version 2, linked from
-<https://gwyddion.net/>, read on 2026-08-07. That constrains reuse twice over: the
-readers cannot be lifted into a permissively licensed library, and whether their
-format knowledge may even be READ while writing a fresh implementation is entry 4
-of #1 and is the maintainer's to answer. Nothing in this survey assumes either
-answer.
+#### Whether an open reader exists anywhere
 
-**The one-dimensional claim is contradicted by the module source.** #13 recorded
-a report that the Bruker OPDx import handles one-dimensional data only.
-`dektakvca.c` carries both directions, declared and called:
+It does, and its shape is the whole problem. Gwyddion is under the GNU General
+Public License version 2, linked from <https://gwyddion.net/>, read on
+2026-08-07. That constrains reuse twice over: the readers cannot be lifted into a
+permissively licensed library, and whether their format knowledge may even be
+READ while writing a fresh implementation is entry 4 of #1 and is the
+maintainer's to answer. Nothing in this survey assumes either answer.
+
+#### The one-dimensional claim is contradicted by the module source
+
+#13 recorded a report that the Bruker OPDx import handles one-dimensional data
+only. `dektakvca.c` carries both directions, declared and called:
 
     static gboolean          find_1d_data    (GHashTable *hash,
     static gboolean          find_2d_data    (GHashTable *hash,
@@ -254,44 +271,48 @@ version 0.3.
 So the claim is contradicted rather than unconfirmed, and this page now says so.
 It may well have been true of the version the report was written against; what is
 not true is that it describes the module in the tree today. The claim is
-withdrawn rather than carried forward, because a gap this page keeps advertising
+withdrawn here and not carried forward, because a gap this page keeps advertising
 after it has closed is how a board talks itself into duplicating working
 software.
 
-**Whether real files are obtainable, from whom, and on what terms.** Not
-established. No public collection of Dektak OPDx or optical profilometry files
-was identified on this check, and unlike the oscilloscope family no importing
-project ships instrument-produced samples in its tree. This family therefore has
-no verification corpus and no route to one that does not begin with a named
-institution. Nothing here should be read as a list of obtainable files.
+#### Whether real files are obtainable, from whom, and on what terms
 
-**What a measurement from this family is, and what it requires of the measurement
-type.** Two shapes rather than one, which is the finding. A stylus profile is a
-height against a single lateral position, and an areal map is a height over two
-lateral axes with, in the module above, a mask marking positions where no height
-was recovered. The mask is the part `docs/decisions/0004-what-a-read-produces.md`
-does not hold: a surface map with invalid points is not the same measurement as
-one where those points are zero, and a reader that returned zeros would produce
-something that reads like a measurement and is not one. This is recorded for the
-interface review in #59 and for the type work in #31, in the same place as the
-Hall findings above and for the same reason.
+Not established. No public collection of Dektak OPDx or optical profilometry
+files was identified on this check, and unlike the oscilloscope family no
+importing project ships instrument-produced samples in its tree. This family
+therefore has no verification corpus and no route to one that does not begin with
+a named institution. Nothing here should be read as a list of obtainable files.
 
-**Recommendation: drop this family.** Not narrow it, drop it, and the reasons are
-cumulative rather than any one being decisive. The coverage exists and is
-maintained. The specific gap this board was carrying, the one-dimensional Bruker
-claim, is contradicted by the source. No real file has been shown to be
-obtainable, so nothing here could be verified to this board's own standard even
-if a reader were written. And the one genuine argument that remains, that the
-coverage is inside a graphical program under a copyleft license and therefore
-unreachable from a pipeline, is an argument about shape that is answered more
-cheaply by asking whether Gwyddion's import modules can be built as a library
-than by writing a fourth implementation of a well-covered format.
+#### What a measurement from this family is, and what it requires of the measurement type
+
+Two shapes, not one, which is the finding. A stylus profile is a height against a
+single lateral position, and an areal map is a height over two lateral axes with,
+in the module above, a mask marking positions where no height was recovered. The
+mask is the part `docs/decisions/0004-what-a-read-produces.md` does not hold: a
+surface map with invalid points is not the same measurement as one where those
+points are zero, and a reader that returned zeros would produce something that
+reads like a measurement and is not one. This is recorded for the interface
+review in #59 and for the type work in #31, in the same place as the Hall
+findings above and for the same reason.
+
+#### Recommendation: drop this family
+
+Not narrow it, drop it. No single reason below is decisive and together they
+settle it. The coverage exists and is maintained. The specific gap this board was
+carrying, the one-dimensional Bruker claim, is contradicted by the source. No
+real file has been shown to be obtainable, so nothing here could be verified to
+this board's own standard even if a reader were written. And the one genuine
+argument that remains, that the coverage is inside a graphical program under a
+copyleft license and therefore unreachable from a pipeline, is an argument about
+shape that is answered more cheaply by asking whether Gwyddion's import modules
+can be built as a library than by writing a fourth implementation of a
+well-covered format.
 
 That last sentence is the honest form of the outcome #54 anticipated. Writing a
 reader here to keep a promise the README made would cost this board a great deal
 and would give the field nothing it does not have.
 
-Reversing this needs an observation rather than a change of mind: a named
+Reversing this needs an observation and not a change of mind: a named
 institution offering real files on stated terms, or a specific format and
 generation shown to be unreadable by the existing coverage. Either one reopens
 this section.
@@ -299,8 +320,8 @@ this section.
 ## Hall measurement rigs
 
 No open reader for the stored file formats was found. What was found is
-instrument control software, which reads from an instrument over a bus rather
-than from a file an instrument already wrote:
+instrument control software, which reads from an instrument over a bus and never
+from a file an instrument already wrote:
 
     gh api repos/lakeshorecryotronics/python-driver --jq '{license: .license.spdx_id, pushed_at, description}'
     {"description":"Python package for interacting with Lake Shore instruments.","license":"MIT","pushed_at":"2026-03-23T16:42:25Z"}
@@ -329,11 +350,13 @@ such reader exists. It is stated that way deliberately.
 ### Survey, 2026-08-07
 
 The five survey questions from #53, per candidate format. Where an answer was not
-found, that is written as not found rather than left as a gap, and the same
-answer is not to be read as no such answer existing.
+found, that is written as not found and not left as a gap, and the same answer is
+not to be read as no such answer existing.
 
-**Which instruments and software versions are actually in use.** Two vendor
-families were identified from public material and a third was not resolved.
+#### Which instruments and software versions are actually in use
+
+Two vendor families were identified from public material and a third was not
+resolved.
 
 Lake Shore Cryotronics 8400 Series Hall Effect Measurement System, with its own
 system software, at <https://www.lakeshore.com/products/product-detail/8400-series-hms/More>
@@ -347,13 +370,14 @@ and <http://www.bridgetec.com/hms5000.html>.
 Which software versions are in the field, and how many file generations each
 family has produced over its service life, was not established. Vendor pages
 describe the current product and not its history, and this is the question that
-has to be answered from rigs rather than from the web.
+has to be answered from rigs and not from the web.
 
-**What the file looks like.** Not established for either family, and the two
-have different shapes of evidence.
+#### What the file looks like
+
+Not established for either family, and the two have different shapes of evidence.
 
 For the Lake Shore system, the vendor material describes SQL reporting with
-export to spreadsheet, PDF and word-processor documents rather than a documented
+export to spreadsheet, PDF and word-processor documents, and describes no
 measurement file. If that holds, the stored artefact is a database and the file a
 user has is an export of it, which is a different reader problem from a binary
 instrument file and would change what a reader for this family even targets.
@@ -364,8 +388,9 @@ For the Ecopia systems, the vendor material describes tabular results and plots
 of the derived quantities against temperature. No format specification, column
 list or sample file was found.
 
-**Whether an open reader exists anywhere.** None found. Four repository searches,
-all run on 2026-08-07:
+#### Whether an open reader exists anywhere
+
+None found. Four repository searches, all run on 2026-08-07:
 
     gh api "search/repositories?q=hall+effect+van+der+pauw+parser" --jq '.total_count'
     0
@@ -384,15 +409,17 @@ shows it is absent. Sources that these searches cannot reach are the ones most
 likely to hold a reader for this family: an import module inside a graphical
 program, a thesis appendix, and a script that never left a research group.
 
-**Whether real files are obtainable, from whom, and on what terms.** Not
-established, and no public source answers it. This question needs a named
-institution and a written answer rather than a search, and until one exists this
-family has no verification corpus. Nothing here should be read as a list of
-obtainable files, because no file has been identified as obtainable.
+#### Whether real files are obtainable, from whom, and on what terms
 
-**What a measurement from this family is, and what it requires of the
-measurement type.** This is the answer that reaches back into the interface, and
-it is a finding rather than a not-found.
+Not established, and no public source answers it. This question needs a named
+institution and a written answer, and a search cannot supply either. Until one
+exists this family has no verification corpus. Nothing here should be read as a
+list of obtainable files, because no file has been identified as obtainable.
+
+#### What a measurement from this family is, and what it requires of the measurement type
+
+This is the answer that reaches back into the interface, and it is a finding and
+not a not-found.
 
 A van der Pauw Hall measurement is not one sweep of samples along an axis. NIST's
 description of the procedure has current forced through one pair of contacts
@@ -418,7 +445,7 @@ resistance from the Hall resistance.
 
 The sample thickness, which is not a measured channel and not an axis, but is
 required to turn the result into a bulk quantity. It is a property of the sample
-rather than of the measurement, and the type has no place for one.
+and not of the measurement, and the type has no place for one.
 
 A reader that returned the voltages as channels on a temperature axis and dropped
 the permutation labels and the field signs would produce something that reads
@@ -441,8 +468,8 @@ the whole of it. The open code found addresses instruments over a bus:
     {"license":null,"pushed_at":"2022-08-26T17:54:12Z"}
 
 PyExpLabSys does carry file parsers, and its description says so, so it was
-checked rather than assumed. Its parser directory covers photoelectron
-spectroscopy and chromatography formats, not vacuum or sputter controller output:
+checked and not assumed. Its parser directory covers photoelectron spectroscopy
+and chromatography formats, not vacuum or sputter controller output:
 
     gh api "search/code?q=repo:CINF/PyExpLabSys+in:path+parser" --jq '.items[].path'
 
@@ -458,8 +485,9 @@ demonstration that nothing exists.
 The five survey questions from #55, plus the one this family adds. Where an
 answer was not found, that is written as not found.
 
-**Which instruments and software versions are actually in use.** Two layers, and
-they are different problems.
+#### Which instruments and software versions are actually in use
+
+Two layers, and they are different problems.
 
 The deposition tool and its control software. Kurt J. Lesker systems run the
 vendor's own control software, whose description states that a system event log
@@ -472,22 +500,24 @@ facility equipment listings, for example at
 2026-08-08.
 
 The gauge and flow controllers underneath, from Pfeiffer, Inficon and MKS, which
-are addressed over a bus and whose readings the tool software records rather than
-storing themselves.
+are addressed over a bus. The tool software records their readings; they store
+nothing themselves.
 
 Which software versions are in the field was not established, and for this family
 it matters more than for the others: the tool software is frequently a specific
 build installed once when the system was commissioned.
 
-**What the file looks like.** Not established for any of them. No format
-specification, column list or sample file was found for any tool control
-software. The one thing the vendor material does say is directional and worth
-recording: what is described is an event log, not a measurement file, which is
-consistent with this family storing a sequence of things that happened rather
-than a block of samples.
+#### What the file looks like
 
-**Whether an open reader exists anywhere.** None found. Six repository searches,
-run on 2026-08-08:
+Not established for any of them. No format specification, column list or sample
+file was found for any tool control software. The one thing the vendor material
+does say is directional and worth recording: what is described is an event log,
+not a measurement file, which is consistent with this family storing a sequence
+of things that happened rather than a block of samples.
+
+#### Whether an open reader exists anywhere
+
+None found. Six repository searches, run on 2026-08-08:
 
     gh api "search/repositories?q=sputter+deposition+log+parser" --jq '.total_count'
     0
@@ -503,21 +533,22 @@ run on 2026-08-08:
     0
 
 The single hit is `pklaus/MaxiGauge`, which writes its own log from a gauge
-controller over a serial link rather than reading a format somebody else wrote.
-It carries no license and was last pushed in 2022. That is a logger, not a
-reader, and counting it as coverage would be the collapse this page exists to
-avoid.
+controller over a serial link. It reads no format anybody else wrote. It carries
+no license and was last pushed in 2022. A logger is not a reader, and counting it
+as coverage would collapse the two kinds of gap this page separates.
 
-**Whether real files are obtainable, from whom, and on what terms.** Not
-established. As with Hall, no file has been identified as obtainable, and this
-page lists none. For this family the obstacle is likely to be sharper than
+#### Whether real files are obtainable, from whom, and on what terms
+
+Not established. As with Hall, no file has been identified as obtainable, and
+this page lists none. For this family the obstacle is likely to be sharper than
 copyright: a process log carries operator names, recipe names and run times,
 which is the kind of content an institution has its own reasons to withhold.
 That is a reason to expect the answer to be difficult and not a claim about what
 any institution would say.
 
-**What a measurement from this family is, and whether the measurement type can
-hold a run log.** Partially, and the missing part is the interesting one.
+#### What a measurement from this family is, and whether the measurement type can hold a run log
+
+Partially, and the missing part is the interesting one.
 
 What fits. Continuous signals sampled over hours, meaning chamber pressure, gas
 flows, source powers and substrate temperature, are named channels on a time
@@ -549,16 +580,18 @@ other than a measurement, is an interface question and not a reader question, an
 inventing an answer inside a reader would be the quiet bypass #55 names. Recorded
 for the interface review in #59 and for #31.
 
-**The archival argument, stated in halves.** The verified half: no open reader
-for this family was found by the six searches above plus the earlier check on
-this page, which is nine searches in total returning one logger and no reader.
-Among the four families here, that is the thinnest coverage found.
+#### The archival argument, stated in halves
+
+The verified half: no open reader for this family was found by the six searches
+above plus the earlier check on this page, which is nine searches in total
+returning one logger and no reader. Among the four families here, that is the
+thinnest coverage found.
 
 The unverified half: that a process log is routinely stranded on the tool
 computer, and that it is what tells somebody in ten years why a deposition came
 out the way it did. Both are plausible and neither was measured. They would be
 established by asking facilities what happens to their tool computers and their
-logs, which is fieldwork rather than search. The argument is therefore recorded
+logs, which is fieldwork and not search. The argument is therefore recorded
 as standing on one leg, and it is not withdrawn: the coverage half is measured
 and is the half that says this family is where the remainder is thickest.
 
@@ -566,10 +599,10 @@ and is the half that says this family is where the remainder is thickest.
 
 The README says the general problem is being addressed by others and that this
 board takes the remainder. This page is what makes that a position a stranger can
-check rather than a posture. On this check the remainder is narrower than four
-families and sharper than the README implies: one family is genuinely covered by
-a library of the right shape, one has readers whose shape is the problem, and two
-returned nothing on the searches run here.
+check. On this check the remainder is narrower than four families and sharper
+than the README implies: one family is genuinely covered by a library of the
+right shape, one has readers whose shape is the problem, and two returned nothing
+on the searches run here.
 
 The breadth surveys in milestone 7 update this page in place. They do not replace
 it and they do not start a second page beside it. Each survey that lands changes
